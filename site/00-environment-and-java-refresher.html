@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 00 — Environment &amp; Java Refresher · GraphHopper Internals Handbook · RumitX</title>
+<meta name="description" content="From-the-source handbook on graphhopper/graphhopper: how an open-source routing engine turns a map into a graph and finds the fastest route — Dijkstra, A*, Contraction Hierarchies, GTFS/RAPTOR transit, and map-matching.">
+<link rel="icon" type="image/svg+xml" href="assets/brand/logo_x.svg">
+<meta name="author" content="RumitX">
+<meta name="theme-color" content="#0B1E2D">
+<link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/code.css">
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<header class="header">
+  <button class="icon-btn" id="menu-btn" aria-label="Open navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+  <a class="brand" href="index.html"><span class="mark"><span>X</span></span> GraphHopper Internals Handbook</a>
+  <span class="spacer"></span>
+  <span class="meta-pill">pinned&nbsp;11.0</span>
+  <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+</header>
+<div class="backdrop"></div>
+<div class="shell">
+  <aside class="rail"><nav>
+<a class="brand-mini" href="index.html"><img src="assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
+<h4>Chapters</h4>
+<a class="active" href="00-environment-and-java-refresher.html"><span class="num">00</span><span>Environment &amp; Java Refresher</span></a>
+<a class="" href="01-mental-model-and-the-repo-map.html"><span class="num">01</span><span>Mental Model &amp; the Repo Map</span></a>
+<a class="" href="02-the-graph-map-to-network.html"><span class="num">02</span><span>The Graph — turning a map into a routable network</span></a>
+<a class="" href="03-shortest-path-algorithms.html"><span class="num">03</span><span>The Shortest-Path Algorithm Family</span><span class="flag">★</span></a>
+<a class="" href="04-profiles-weighting-custom-models.html"><span class="num">04</span><span>Profiles, Weighting &amp; Custom Models</span></a>
+<a class="" href="05-public-transit-gtfs-raptor.html"><span class="num">05</span><span>Public Transit — GTFS &amp; RAPTOR</span></a>
+<a class="" href="06-map-matching.html"><span class="num">06</span><span>Map-Matching — snapping GPS to roads</span></a>
+<a class="" href="07-navigation-isochrones-web.html"><span class="num">07</span><span>Navigation, Isochrones &amp; the Web/Tiles Surface</span></a>
+<a class="" href="08-capstone-and-staying-current.html"><span class="num">08</span><span>Capstone &amp; Staying Current</span></a>
+<h4>Reference</h4>
+<a class="" href="glossary.html"><span class="num">§</span><span>Glossary &amp; Index</span></a>
+<a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener"><span class="num">↗</span><span>GitHub repo</span></a>
+</nav></aside>
+  <main class="content"><article class="article">
+    <div class="crumbs"><a href="index.html">Handbook</a> / Chapter 00</div>
+    <h1 id="chapter-00-environment-java-refresher">Chapter 00 — Environment &amp; Java Refresher</h1>
+<div class="callout goal">
+<p><strong>Goal:</strong> End this chapter with a <em>readable</em> copy of GraphHopper pinned to <strong><code>11.0</code></strong> (<code>69e50f6</code>), a
+Maven build that produces a runnable server, that server answering a real <code>/route</code> on a city-sized
+extract, and fluency in the four idioms the codebase assumes you already know: the <strong>fluent
+<code>GraphHopper</code>/<code>GHRequest</code> API</strong>, the <strong>Maven multi-module</strong> layout, <strong>flat-array <code>DataAccess</code> storage</strong>,
+and the <strong>two-phase "import then query"</strong> lifecycle. You won't read every module — you'll learn to <em>read</em>
+any of them.</p>
+</div>
+<h2 id="01-why-it-matters">0.1 Why it matters</h2>
+<p>If you open <code>core/src/main/java/com/graphhopper/routing/Dijkstra.java</code> cold, it will look deceptively
+simple — a priority queue and a loop. The confusion isn't in the algorithm; it's in the <em>scaffolding</em>
+around it: a <code>Weighting</code> you didn't define, an <code>EdgeExplorer</code> that iterates something that isn't a
+collection, an integer <code>edgeId</code> where you expected an object, and a graph that lives in <code>byte[]</code> segments
+instead of a <code>Map&lt;Node, List&lt;Edge&gt;&gt;</code>. None of that is hard once you know what <em>kind</em> of thing each is.
+This chapter front-loads those idioms so the rest of the book is about <em>routing</em>, not plumbing.</p>
+<p>The other reason: GraphHopper is built to answer a route in <strong>under a millisecond</strong> over a
+continent-sized graph, on a server with a fixed memory budget. That performance discipline — pack the
+graph into flat arrays, preprocess once, then do read-only queries — shapes every design decision you're
+about to read. If you've ever cared about latency and memory on a backend that real users hit, this
+framing will feel like home.</p>
+<h2 id="02-get-the-source-pinned">0.2 Get the source, pinned</h2>
+<p>We pin to a fixed release tag so every <code>file:line</code> in this book resolves. Clone shallow at the tag:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/Documents/learning<span class="w">   </span><span class="c1"># or wherever you keep the book</span>
+git<span class="w"> </span>clone<span class="w"> </span>--depth<span class="w"> </span><span class="m">1</span><span class="w"> </span>--branch<span class="w"> </span><span class="m">11</span>.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>https://github.com/graphhopper/graphhopper.git<span class="w"> </span>graphhopper
+<span class="nb">cd</span><span class="w"> </span>graphhopper
+git<span class="w"> </span>rev-parse<span class="w"> </span>--short<span class="w"> </span>HEAD<span class="w">     </span><span class="c1"># → 69e50f6</span>
+git<span class="w"> </span>describe<span class="w"> </span>--tags<span class="w">            </span><span class="c1"># → 11.0</span>
+</code></pre></div></figure>
+
+<div class="callout info"><span class="ic">📁</span>
+<p> Note the tag has <strong>no <code>v</code> prefix</strong> — it is <code>11.0</code>, not <code>v11.0</code>. <code>git describe --tags</code> prints exactly
+<code>11.0</code>. Use this ref and your line numbers will match this book.</p>
+</div>
+<p>There are no submodules to chase — GraphHopper vendors nothing heavy in git. The only large inputs are the
+OSM extract and (in Chapter 5) a GTFS feed, which you download separately and which <code>.gitignore</code> keeps out.</p>
+<h2 id="03-the-environment-java-17-and-maven">0.3 The environment: Java 17 and Maven</h2>
+<p>GraphHopper is emphatic about its Java version. From the build metadata:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">XML</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nt">&lt;maven.compiler.target&gt;</span>17<span class="nt">&lt;/maven.compiler.target&gt;</span>
+</code></pre></div></figure>
+
+<p>📌 <code>pom.xml:19</code> (and <code>&lt;release&gt;17&lt;/release&gt;</code> in the compiler plugin at <code>pom.xml:187</code>; the README states
+"≥ Java 17" at <code>README.md:106</code>). Java <strong>17 or newer</strong> — earlier JDKs will not compile it.</p>
+<p>It is a <strong>Maven multi-module</strong> project. The root <code>pom.xml</code> lists the modules this book tours:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">XML</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nt">&lt;modules&gt;</span>
+<span class="w">  </span><span class="nt">&lt;module&gt;</span>core<span class="nt">&lt;/module&gt;</span><span class="w">          </span><span class="cm">&lt;!-- the graph + the routing algorithms --&gt;</span>
+<span class="w">  </span><span class="nt">&lt;module&gt;</span>reader-gtfs<span class="nt">&lt;/module&gt;</span><span class="w">   </span><span class="cm">&lt;!-- public transit (Chapter 5) --&gt;</span>
+<span class="w">  </span><span class="nt">&lt;module&gt;</span>tools<span class="nt">&lt;/module&gt;</span>
+<span class="w">  </span><span class="nt">&lt;module&gt;</span>map-matching<span class="nt">&lt;/module&gt;</span><span class="w">  </span><span class="cm">&lt;!-- GPS → road (Chapter 6) --&gt;</span>
+<span class="w">  </span><span class="nt">&lt;module&gt;</span>web-bundle<span class="nt">&lt;/module&gt;</span><span class="w">    </span><span class="cm">&lt;!-- the HTTP resources (RouteResource, …) --&gt;</span>
+<span class="w">  </span><span class="nt">&lt;module&gt;</span>web-api<span class="nt">&lt;/module&gt;</span><span class="w">       </span><span class="cm">&lt;!-- the request/response value objects --&gt;</span>
+<span class="w">  </span><span class="nt">&lt;module&gt;</span>web<span class="nt">&lt;/module&gt;</span><span class="w">           </span><span class="cm">&lt;!-- the Dropwizard server --&gt;</span>
+<span class="w">  </span><span class="nt">&lt;module&gt;</span>client-hc<span class="nt">&lt;/module&gt;</span>
+<span class="w">  </span><span class="nt">&lt;module&gt;</span>navigation<span class="nt">&lt;/module&gt;</span>
+<span class="w">  </span><span class="nt">&lt;module&gt;</span>example<span class="nt">&lt;/module&gt;</span><span class="w">       </span><span class="cm">&lt;!-- runnable Java examples --&gt;</span>
+<span class="nt">&lt;/modules&gt;</span>
+</code></pre></div></figure>
+
+<p>📌 <code>pom.xml:60</code>–<code>:71</code>. The parent artifact is <code>graphhopper-parent</code>, version <code>11.0-SNAPSHOT</code>, packaging
+<code>pom</code> (<code>pom.xml:6</code>–<code>:10</code>).</p>
+<div class="callout note"><span class="ic">🧠</span>
+<p> <strong>Mental model:</strong> when you want to know where something lives, map the concern to a module first.
+<em>Algorithm?</em> <code>core</code>. <em>HTTP endpoint?</em> <code>web-bundle/.../resources/</code>. <em>The <code>GHRequest</code> you pass in?</em>
+<code>web-api</code>. <em>Transit?</em> <code>reader-gtfs</code>. You'll almost never grep the whole tree — you grep one module.</p>
+</div>
+<p>Build everything (this compiles the modules and produces the server jar):</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code>mvn<span class="w"> </span>-q<span class="w"> </span>-DskipTests<span class="w"> </span>clean<span class="w"> </span>install<span class="w">       </span><span class="c1"># first run downloads deps; a few minutes</span>
+</code></pre></div></figure>
+
+<p>Then run the server. The fastest path uses the bundled tiny country <strong>Andorra</strong>, which ships in the repo:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1"># config-example.yml is at the repo root; andorra.osm.pbf is bundled under core/files/</span>
+java<span class="w"> </span>-D<span class="s2">&quot;dw.graphhopper.datareader.file=core/files/andorra.osm.pbf&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">     </span>-jar<span class="w"> </span>web/target/graphhopper-web-*.jar<span class="w"> </span>server<span class="w"> </span>config-example.yml
+<span class="c1"># → open http://localhost:8989/  (a Leaflet map you can click to route on)</span>
+</code></pre></div></figure>
+
+<p>The server entry point is a Dropwizard <code>Application</code>:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kd">class</span> <span class="nc">GraphHopperApplication</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">Application</span><span class="o">&lt;</span><span class="n">GraphHopperServerConfiguration</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">new</span><span class="w"> </span><span class="n">GraphHopperApplication</span><span class="p">().</span><span class="na">run</span><span class="p">(</span><span class="n">args</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+</code></pre></div></figure>
+
+<p>📌 <code>web/src/main/java/com/graphhopper/application/GraphHopperApplication.java:34</code>–<code>:38</code>. It listens on
+<code>8989</code> and the config it reads (<code>config-example.yml</code>) declares <code>graph.location: graph-cache</code> (line 6), the
+<code>profiles:</code> list (line 31 — the first is <code>car</code>), and the <code>profiles_ch:</code> block (line 86) that turns on
+Contraction Hierarchies. We'll unpack all of those; for now, get a green <code>/route</code>.</p>
+<div class="callout tip"><span class="ic">💡</span>
+<p> You can read and grep the entire codebase with <strong>no build at all</strong>. Only the labs that <em>run</em> a query
+need the server. Don't let a slow first <code>mvn install</code> block you from reading source.</p>
+</div>
+<h2 id="04-idiom-1-the-fluent-facade-graphhopper-ghrequest-ghresponse">0.4 Idiom 1 — the fluent façade: <code>GraphHopper</code>, <code>GHRequest</code>, <code>GHResponse</code></h2>
+<p>The public API is a <strong>builder</strong>. You configure one <code>GraphHopper</code> object with chained setters, call
+<code>importOrLoad()</code>, and then ask it for routes. The canonical example is the book's Rosetta stone:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">GraphHopper</span><span class="w"> </span><span class="n">hopper</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">GraphHopper</span><span class="p">();</span>
+<span class="n">hopper</span><span class="p">.</span><span class="na">setOSMFile</span><span class="p">(</span><span class="s">&quot;core/files/andorra.osm.pbf&quot;</span><span class="p">);</span>
+<span class="n">hopper</span><span class="p">.</span><span class="na">setGraphHopperLocation</span><span class="p">(</span><span class="s">&quot;target/routing-graph-cache&quot;</span><span class="p">);</span>
+<span class="n">hopper</span><span class="p">.</span><span class="na">setEncodedValuesString</span><span class="p">(</span><span class="s">&quot;car_access, car_average_speed&quot;</span><span class="p">);</span>
+<span class="n">hopper</span><span class="p">.</span><span class="na">setProfiles</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Profile</span><span class="p">(</span><span class="s">&quot;car&quot;</span><span class="p">).</span><span class="na">setCustomModel</span><span class="p">(...));</span>
+<span class="n">hopper</span><span class="p">.</span><span class="na">getCHPreparationHandler</span><span class="p">().</span><span class="na">setCHProfiles</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">CHProfile</span><span class="p">(</span><span class="s">&quot;car&quot;</span><span class="p">));</span>
+<span class="n">hopper</span><span class="p">.</span><span class="na">importOrLoad</span><span class="p">();</span>
+</code></pre></div></figure>
+
+<p>📌 <code>example/src/main/java/com/graphhopper/example/RoutingExample.java:32</code>–<code>:49</code> (<code>createGraphHopperInstance</code>).
+Every setter returns nothing here for readability, but the API is fluent — <code>GraphHopper.setOSMFile</code>
+(<code>GraphHopper.java:350</code>), <code>setGraphHopperLocation</code> (<code>:333</code>), <code>setEncodedValuesString</code> (<code>:144</code>),
+<code>setProfiles</code> (<code>:273</code>) — and the <code>GraphHopper</code> façade class itself is <code>GraphHopper.java:85</code>.</p>
+<p>A route is a request object in, a response object out:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">GHRequest</span><span class="w"> </span><span class="n">req</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">GHRequest</span><span class="p">(</span><span class="mf">42.508552</span><span class="p">,</span><span class="w"> </span><span class="mf">1.532936</span><span class="p">,</span><span class="w"> </span><span class="mf">42.507508</span><span class="p">,</span><span class="w"> </span><span class="mf">1.528773</span><span class="p">)</span>
+<span class="w">        </span><span class="p">.</span><span class="na">setProfile</span><span class="p">(</span><span class="s">&quot;car&quot;</span><span class="p">).</span><span class="na">setLocale</span><span class="p">(</span><span class="n">Locale</span><span class="p">.</span><span class="na">US</span><span class="p">);</span>
+<span class="n">GHResponse</span><span class="w"> </span><span class="n">rsp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hopper</span><span class="p">.</span><span class="na">route</span><span class="p">(</span><span class="n">req</span><span class="p">);</span>
+<span class="n">ResponsePath</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rsp</span><span class="p">.</span><span class="na">getBest</span><span class="p">();</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">distanceMeters</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">path</span><span class="p">.</span><span class="na">getDistance</span><span class="p">();</span><span class="w">   </span><span class="c1">// :148</span>
+<span class="kt">long</span><span class="w"> </span><span class="n">timeMillis</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="n">path</span><span class="p">.</span><span class="na">getTime</span><span class="p">();</span>
+</code></pre></div></figure>
+
+<p>📌 <code>RoutingExample.java:51</code>–<code>:73</code>. The three value objects you'll meet on every page live in <code>web-api</code>:</p>
+<ul>
+<li><strong><code>GHRequest</code></strong> — points + profile + options. <code>GHRequest.java:38</code>; constructors at <code>:51/:62/:66/:81</code>;
+  the fluent <code>addPoint</code> returns <code>this</code> (<code>:99</code>–<code>:104</code>), <code>setProfile</code> at <code>:168</code>.</li>
+<li><strong><code>GHResponse</code></strong> — the best path plus alternatives: <code>GHResponse.java:32</code>; <code>getBest()</code> returns
+  <code>responsePaths.get(0)</code> (<code>:48</code>–<code>:53</code>); <code>hasErrors()</code> at <code>:94</code>.</li>
+<li><strong><code>ResponsePath</code></strong> — one route: <code>ResponsePath.java:34</code>; <code>getPoints()</code> (<code>:99</code>), <code>getDistance()</code> (<code>:148</code>).</li>
+</ul>
+<div class="callout note"><span class="ic">🧠</span>
+<p> <strong>Mental model:</strong> <code>GraphHopper</code> is a <em>façade</em>. It hides the graph, the location index, the CH graphs
+and the landmarks behind two verbs — <code>importOrLoad()</code> (build or open) and <code>route()</code> (ask). The whole web
+layer (Chapter 1) is just this API reached over HTTP.</p>
+</div>
+<h2 id="05-idiom-2-the-two-phase-lifecycle-import-once-query-many">0.5 Idiom 2 — the two-phase lifecycle: import once, query many</h2>
+<p>The single most important shape in GraphHopper is that <strong>preprocessing and querying are different
+phases</strong>. <code>importOrLoad()</code> says it out loud:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="n">GraphHopper</span><span class="w"> </span><span class="nf">importOrLoad</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">load</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">printInfo</span><span class="p">();</span>
+<span class="w">        </span><span class="n">process</span><span class="p">(</span><span class="kc">false</span><span class="p">);</span><span class="w">   </span><span class="c1">// parse OSM, build the graph, run CH/LM preparation, write graph-cache/</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">printInfo</span><span class="p">();</span><span class="w">       </span><span class="c1">// graph-cache/ already exists → just memory-map it</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></figure>
+
+<p>📌 <code>GraphHopper.java:793</code>–<code>:801</code>. The first run parses the <code>.osm.pbf</code>, builds the graph, runs the heavy
+Contraction-Hierarchies / Landmarks <em>preparation</em> (Chapter 3), and writes everything to the
+<code>graph-cache/</code> directory. Every run after that just <strong>loads</strong> that directory — which is why a warm start
+is instant and queries never touch OSM again.</p>
+<div class="callout tip"><span class="ic">💡</span>
+<p> If you change a profile, an encoded value, or the OSM file, you must <strong>delete <code>graph-cache/</code></strong> and
+re-import. A stale cache is the #1 "why didn't my change take effect?" gotcha. (Chapter 4 explains why
+a <code>CustomModel</code> edit is import-time, not query-time.)</p>
+</div>
+<h2 id="06-idiom-3-the-graph-is-flat-arrays-not-objects">0.6 Idiom 3 — the graph is flat arrays, not objects</h2>
+<p>Here is the idiom that surprises app developers most. GraphHopper does <strong>not</strong> store the road network as
+<code>Node</code> and <code>Edge</code> objects. It stores it as <strong>primitive arrays of bytes</strong>, addressed by integer id, behind
+a <code>DataAccess</code>:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">interface</span> <span class="nc">DataAccess</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">Closeable</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">setInt</span><span class="p">(</span><span class="kt">long</span><span class="w"> </span><span class="n">bytePos</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">value</span><span class="p">);</span><span class="w">   </span><span class="c1">// :37</span>
+<span class="w">    </span><span class="kt">int</span><span class="w">  </span><span class="nf">getInt</span><span class="p">(</span><span class="kt">long</span><span class="w"> </span><span class="n">bytePos</span><span class="p">);</span><span class="w">              </span><span class="c1">// :42</span>
+<span class="w">    </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">loadExisting</span><span class="p">();</span><span class="w">                 </span><span class="c1">// :105</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/storage/DataAccess.java:28</code>. A node is an <code>int</code>; an edge is an
+<code>int</code>; reading "the distance of edge 42" is an <em>offset computation into a byte array</em>, not a field access
+on an object. There are two implementations, chosen by <code>DAType</code>:</p>
+<ul>
+<li><strong><code>RAMDataAccess</code></strong> — on-heap <code>byte[][] segments</code> (<code>RAMDataAccess.java:35</code>–<code>:36</code>). The default.</li>
+<li><strong><code>MMapDataAccess</code></strong> — memory-mapped files, so a continent-sized graph never fully enters the heap:</li>
+</ul>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">buf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">raFile</span><span class="p">.</span><span class="na">getChannel</span><span class="p">().</span><span class="na">map</span><span class="p">(</span>
+<span class="w">        </span><span class="n">allowWrites</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">FileChannel</span><span class="p">.</span><span class="na">MapMode</span><span class="p">.</span><span class="na">READ_WRITE</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">FileChannel</span><span class="p">.</span><span class="na">MapMode</span><span class="p">.</span><span class="na">READ_ONLY</span><span class="p">,</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">byteCount</span><span class="p">);</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/storage/MMapDataAccess.java:163</code>–<code>:164</code> (the class at <code>:49</code>,
+<code>DAType.MMAP</code> at <code>DAType.java:49</code>). This is the same "operate on a mapped buffer, don't <code>memcpy</code> the world
+into your address space" discipline you'd use for a large read-mostly dataset.</p>
+<div class="callout note"><span class="ic">🧠</span>
+<p> <strong>Mental model:</strong> every "graph" thing is an <code>int</code> id and a byte offset. When Chapter 2 shows an
+<code>EdgeIterator</code>, it isn't iterating a <code>List</code> — it's advancing a cursor over these flat arrays. Hold that
+and the storage layer stops being mysterious.</p>
+</div>
+<h2 id="07-idiom-4-encoded-values-per-edge-attributes-packed-into-bits">0.7 Idiom 4 — encoded values: per-edge attributes packed into bits</h2>
+<p>The last idiom: the properties a route cares about — is this road accessible to a car? what's its average
+speed? its road class? — are stored per edge as <strong>encoded values</strong>, small bit-packed fields inside the
+edge record. You configured two of them in §0.4 with
+<code>setEncodedValuesString("car_access, car_average_speed")</code>. The <code>Weighting</code> (Chapter 3) reads them back
+edge by edge to compute a cost. You don't need the encoder internals yet; just recognize the shape: an
+<code>EncodedValue</code> is a named, bit-width-fixed accessor into the edge's flat storage, resolved through an
+<code>EncodingManager</code>. Chapter 4 is where this becomes your main tool.</p>
+<h2 id="08-lab-0-build-it-and-get-a-first-route">0.8 Lab 0 — build it and get a first route</h2>
+<div class="callout lab"><span class="ic">🧪</span>
+<p> <strong>Lab 0.</strong> Goal: confirm your clone is pinned, the build is green, and the server answers a real
+route. Record results in <a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab00-build.md"><code>labs/lab00-build.md</code></a>.</p>
+</div>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/Documents/learning/graphhopper
+git<span class="w"> </span>describe<span class="w"> </span>--tags<span class="w">                                  </span><span class="c1"># expect: 11.0</span>
+git<span class="w"> </span>rev-parse<span class="w"> </span>--short<span class="w"> </span>HEAD<span class="w">                            </span><span class="c1"># expect: 69e50f6</span>
+
+<span class="c1"># count the Maven modules the build knows about:</span>
+grep<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;&lt;module&gt;&quot;</span><span class="w"> </span>pom.xml<span class="w">                            </span><span class="c1"># expect: 10</span>
+
+<span class="c1"># build (skip tests for speed), then run on the bundled Andorra extract:</span>
+mvn<span class="w"> </span>-q<span class="w"> </span>-DskipTests<span class="w"> </span>clean<span class="w"> </span>install
+java<span class="w"> </span>-D<span class="s2">&quot;dw.graphhopper.datareader.file=core/files/andorra.osm.pbf&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">     </span>-jar<span class="w"> </span>web/target/graphhopper-web-*.jar<span class="w"> </span>server<span class="w"> </span>config-example.yml<span class="w"> </span><span class="p">&amp;</span>
+sleep<span class="w"> </span><span class="m">20</span><span class="w">   </span><span class="c1"># first import parses OSM + runs CH prep, then writes graph-cache/</span>
+
+<span class="c1"># ask for a route across Andorra la Vella and read the answer:</span>
+python3<span class="w"> </span>~/Documents/learning/graphhopper-book/labs/query_route/query.py<span class="w"> </span><span class="se">\</span>
+<span class="w">        </span><span class="m">42</span>.508,1.533<span class="w"> </span><span class="m">42</span>.5075,1.5288
+</code></pre></div></figure>
+
+<p><strong>Expected:</strong> <code>git describe</code> prints <code>11.0</code>; the module count is <code>10</code>; the first server start logs an OSM
+import and CH preparation, then "Started server" on port <code>8989</code>; and <code>query.py</code> prints one line with a
+distance in kilometres, a time in minutes, and a handful of instructions. Write the import time and the
+<code>graph-cache/</code> size into your lab note — you'll compare a warm (load-only) restart against it.</p>
+<h2 id="09-checkpoint">0.9 Checkpoint</h2>
+<ol>
+<li>Why does this book pin to a tag <em>and</em> a SHA instead of tracking <code>master</code>? What exact string does
+   <code>git describe --tags</code> print?</li>
+<li>You want to find the HTTP endpoint that handles <code>/route</code>. Which <em>module</em> do you look in, and which
+   holds the <code>GHRequest</code> class you pass to it?</li>
+<li>What are the two phases <code>importOrLoad()</code> chooses between, and what lives in <code>graph-cache/</code>?</li>
+<li>A node and an edge are each just an <code>int</code>. What actually holds "the distance of edge 42", and what are
+   the two <code>DataAccess</code> implementations that back it?</li>
+<li>Which Java version is mandatory, and which two lines in <code>pom.xml</code> pin it?</li>
+</ol>
+<div class="callout note">
+<p>If #3 is shaky, re-read §0.5. If #4 is shaky, re-read §0.6.</p>
+</div>
+<h2 class="connect" id="connect-to-your-past-transit-ride-hailing-backends">🔌 Connect to your past (transit &amp; ride-hailing backends)</h2>
+<p>Two bridges that recur through the whole book:</p>
+<ul>
+<li><strong>Transit apps (BusMap / VinBus).</strong> A transit backend is exactly this shape: import a static feed once
+  (there, GTFS instead of OSM), preprocess it into a fast query structure, then serve read-only journey
+  queries. GraphHopper's import-then-query lifecycle (§0.5) <em>is</em> how you'd structure a stop-and-schedule
+  service, and Chapter 5 shows GraphHopper doing precisely that with <code>reader-gtfs</code>.</li>
+<li><strong>Ride-hailing / navigation.</strong> Every time this book says "<code>hopper.route(req)</code> returns a <code>ResponsePath</code>",
+  read it as "the routing microservice answered the ETA/dispatch query your app made." The fluent
+  <code>GHRequest</code> → <code>GHResponse</code> boundary is the same contract your app already has with whatever routing
+  service it calls today — you're about to see the other side of it.</li>
+</ul>
+<p><strong>Next:</strong> with the idioms and a running server in hand, let's see the whole machine at once — the module
+map, and one <code>/route</code> request's journey from HTTP to answer. → <strong><a href="01-mental-model-and-the-repo-map.html">Chapter 01 — Mental Model &amp; the Repo Map</a></strong></p>
+    <nav class="pager"><a class="prev" href="index.html"><span class="lbl">← Previous</span><span class="ttl">Home</span></a><a class="next" href="01-mental-model-and-the-repo-map.html"><span class="lbl">Next →</span><span class="ttl">Mental Model &amp; the Repo Map</span></a></nav>
+  </article></main>
+  <aside class="toc"><nav><h4>On this page</h4>
+<a class="lvl-2" href="#01-why-it-matters">0.1 Why it matters</a>
+<a class="lvl-2" href="#02-get-the-source-pinned">0.2 Get the source, pinned</a>
+<a class="lvl-2" href="#03-the-environment-java-17-and-maven">0.3 The environment: Java 17 and Maven</a>
+<a class="lvl-2" href="#04-idiom-1-the-fluent-facade-graphhopper-ghrequest-ghresponse">0.4 Idiom 1 — the fluent façade: GraphHopper, GHRequest, GHResponse</a>
+<a class="lvl-2" href="#05-idiom-2-the-two-phase-lifecycle-import-once-query-many">0.5 Idiom 2 — the two-phase lifecycle: import once, query many</a>
+<a class="lvl-2" href="#06-idiom-3-the-graph-is-flat-arrays-not-objects">0.6 Idiom 3 — the graph is flat arrays, not objects</a>
+<a class="lvl-2" href="#07-idiom-4-encoded-values-per-edge-attributes-packed-into-bits">0.7 Idiom 4 — encoded values: per-edge attributes packed into bits</a>
+<a class="lvl-2" href="#08-lab-0-build-it-and-get-a-first-route">0.8 Lab 0 — build it and get a first route</a>
+<a class="lvl-2" href="#09-checkpoint">0.9 Checkpoint</a>
+<a class="lvl-2" href="#connect-to-your-past-transit-ride-hailing-backends">🔌 Connect to your past (transit &amp; ride-hailing backends)</a>
+</nav></aside>
+</div>
+<footer class="site-foot">
+  <a class="foot-brand" href="https://rumitx.com" target="_blank" rel="noopener"><span class="foot-x">X</span> RumitX</a>
+  GraphHopper Internals Handbook · grounded in <a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener">graphhopper/graphhopper</a>
+  @ <code>11.0</code> · maps &amp; route-finding, from the source<br>
+  A <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> publication · maps, routing &amp; human-centric mobility
+</footer>
+<script src="assets/app.js"></script>
+</body>
+</html>

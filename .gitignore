@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Build scratch (the built site IS committed; these are transient)
+site/assets/code.css.tmp
+*.log
+.ss_tmp/
+
+# Lab inputs & import artifacts (large, reproducible — never commit)
+graph-cache/
+*.osm.pbf
+*.osm
+gtfs*.zip
+*-gtfs.zip

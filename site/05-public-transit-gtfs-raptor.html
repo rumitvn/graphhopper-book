@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 05 — Public Transit: GTFS &amp; RAPTOR · GraphHopper Internals Handbook · RumitX</title>
+<meta name="description" content="From-the-source handbook on graphhopper/graphhopper: how an open-source routing engine turns a map into a graph and finds the fastest route — Dijkstra, A*, Contraction Hierarchies, GTFS/RAPTOR transit, and map-matching.">
+<link rel="icon" type="image/svg+xml" href="assets/brand/logo_x.svg">
+<meta name="author" content="RumitX">
+<meta name="theme-color" content="#0B1E2D">
+<link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/code.css">
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<header class="header">
+  <button class="icon-btn" id="menu-btn" aria-label="Open navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+  <a class="brand" href="index.html"><span class="mark"><span>X</span></span> GraphHopper Internals Handbook</a>
+  <span class="spacer"></span>
+  <span class="meta-pill">pinned&nbsp;11.0</span>
+  <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+</header>
+<div class="backdrop"></div>
+<div class="shell">
+  <aside class="rail"><nav>
+<a class="brand-mini" href="index.html"><img src="assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
+<h4>Chapters</h4>
+<a class="" href="00-environment-and-java-refresher.html"><span class="num">00</span><span>Environment &amp; Java Refresher</span></a>
+<a class="" href="01-mental-model-and-the-repo-map.html"><span class="num">01</span><span>Mental Model &amp; the Repo Map</span></a>
+<a class="" href="02-the-graph-map-to-network.html"><span class="num">02</span><span>The Graph — turning a map into a routable network</span></a>
+<a class="" href="03-shortest-path-algorithms.html"><span class="num">03</span><span>The Shortest-Path Algorithm Family</span><span class="flag">★</span></a>
+<a class="" href="04-profiles-weighting-custom-models.html"><span class="num">04</span><span>Profiles, Weighting &amp; Custom Models</span></a>
+<a class="active" href="05-public-transit-gtfs-raptor.html"><span class="num">05</span><span>Public Transit — GTFS &amp; RAPTOR</span></a>
+<a class="" href="06-map-matching.html"><span class="num">06</span><span>Map-Matching — snapping GPS to roads</span></a>
+<a class="" href="07-navigation-isochrones-web.html"><span class="num">07</span><span>Navigation, Isochrones &amp; the Web/Tiles Surface</span></a>
+<a class="" href="08-capstone-and-staying-current.html"><span class="num">08</span><span>Capstone &amp; Staying Current</span></a>
+<h4>Reference</h4>
+<a class="" href="glossary.html"><span class="num">§</span><span>Glossary &amp; Index</span></a>
+<a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener"><span class="num">↗</span><span>GitHub repo</span></a>
+</nav></aside>
+  <main class="content"><article class="article">
+    <div class="crumbs"><a href="index.html">Handbook</a> / Chapter 05</div>
+    <h1 id="chapter-05-public-transit-gtfs-raptor">Chapter 05 — Public Transit: GTFS &amp; RAPTOR</h1>
+<div class="callout goal">
+<p><strong>Goal:</strong> Understand how GraphHopper plans a bus/train journey. After this chapter you can explain how
+<code>GtfsReader</code> turns a GTFS feed into a <strong>time-expanded</strong> <code>PtGraph</code> (one node per stop-time, edges for
+boarding, riding, dwelling, transferring), how <code>MultiCriteriaLabelSetting</code> does a <strong>RAPTOR-style</strong>
+multi-criteria search over it (arrival time vs transfers vs walking), and how GTFS-realtime folds live
+delays back in. Pinned to <strong><code>11.0</code></strong> (<code>69e50f6</code>). This is the BusMap / VinBus chapter.</p>
+</div>
+<h2 id="51-why-it-matters">5.1 Why it matters</h2>
+<p>Road routing has one cost and no clock: an edge is always there and always the same length. Transit is the
+opposite — you can only board a bus <em>when it departs</em>, a "faster" route with three transfers may be worse
+than a slower direct one, and "shortest" is genuinely multi-dimensional. RAPTOR (Round-bAsed Public Transit
+Optimized Router) and its label-setting cousins exist precisely because Dijkstra-over-distance can't express
+"leave later, arrive earlier, but only if you don't mind two changes."</p>
+<p>This is the chapter that maps straight onto your day job. BusMap's journey planner and VinBus's "when's the
+next bus and when will I arrive" are exactly this computation. By the end you'll recognize your own product
+in <code>MultiCriteriaLabelSetting</code>.</p>
+<h2 id="52-mental-model-fold-time-into-the-graph">5.2 Mental model: fold time into the graph</h2>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">text</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code>  GTFS feed (stops.txt, trips.txt, stop_times.txt, transfers.txt)
+        │  GtfsReader.buildPtNetwork()
+        ▼
+   time-expanded PtGraph — one node per (stop, time) event, not per stop:
+
+     stop A          stop B          stop C
+   depart 09:00 ──HOP──▶ arrive 09:10 ──DWELL──▶ depart 09:12 ──HOP──▶ arrive 09:25
+      ▲                     │                        ▲                     │
+     BOARD                ALIGHT                    BOARD                 ALIGHT
+      │                     ▼                        │                     ▼
+   [ departure timeline at A ]   ──WAIT──▶ [ next departure ]   ...  street/walk edges
+      ▲ ENTER_PT                                                        connect timelines
+   street node (walk here from the road network — Chapters 2–3)
+</code></pre></div></figure>
+
+<p>The trick is <strong>time expansion</strong>: instead of one node per stop, there's one node per <em>event</em> (this trip
+departs A at 09:00; this trip arrives B at 09:10). Riding a vehicle is a <code>HOP</code> edge whose weight is the
+scheduled minutes; boarding and alighting are <code>BOARD</code>/<code>ALIGHT</code> edges connecting a stop's departure timeline
+to the trip; waiting at a stop is a <code>WAIT</code> edge along the timeline. Because arrival time is baked into the
+node, a plain graph search over this structure respects the schedule automatically.</p>
+<h2 id="53-gtfs-ptgraph">5.3 GTFS → <code>PtGraph</code></h2>
+<p>The build is three steps:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">void</span><span class="w"> </span><span class="nf">buildPtNetwork</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">createTrips</span><span class="p">();</span>
+<span class="w">    </span><span class="n">wireUpStops</span><span class="p">();</span>
+<span class="w">    </span><span class="n">insertGtfsTransfers</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div></figure>
+
+<p>📌 <code>reader-gtfs/src/main/java/com/graphhopper/gtfs/GtfsReader.java:118</code>–<code>:122</code>. <code>createTrips</code> walks each
+trip's stop-times and lays down the per-trip edges — this is the literal construction of the diagram above:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// riding between consecutive stops of a trip:</span>
+<span class="n">out</span><span class="p">.</span><span class="na">createEdge</span><span class="p">(</span><span class="n">departureNode</span><span class="p">,</span><span class="w"> </span><span class="n">arrivalNode</span><span class="p">,</span>
+<span class="w">    </span><span class="k">new</span><span class="w"> </span><span class="n">PtEdgeAttributes</span><span class="p">(</span><span class="n">GtfsStorage</span><span class="p">.</span><span class="na">EdgeType</span><span class="p">.</span><span class="na">HOP</span><span class="p">,</span><span class="w"> </span><span class="n">stopTime</span><span class="p">.</span><span class="na">arrival_time</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">prev</span><span class="p">.</span><span class="na">departure_time</span><span class="p">,</span><span class="w"> </span><span class="p">...));</span><span class="w">  </span><span class="c1">// :272</span>
+<span class="c1">// connecting the trip to the stop&#39;s timeline:</span>
+<span class="n">out</span><span class="p">.</span><span class="na">createEdge</span><span class="p">(</span><span class="n">departureTimelineNode</span><span class="p">,</span><span class="w"> </span><span class="n">departureNode</span><span class="p">,</span>
+<span class="w">    </span><span class="k">new</span><span class="w"> </span><span class="n">PtEdgeAttributes</span><span class="p">(</span><span class="n">GtfsStorage</span><span class="p">.</span><span class="na">EdgeType</span><span class="p">.</span><span class="na">BOARD</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">validOn</span><span class="p">,</span><span class="w"> </span><span class="p">...));</span><span class="w">                                  </span><span class="c1">// :290</span>
+<span class="n">out</span><span class="p">.</span><span class="na">createEdge</span><span class="p">(</span><span class="n">arrivalNode</span><span class="p">,</span><span class="w"> </span><span class="n">arrivalTimelineNode</span><span class="p">,</span>
+<span class="w">    </span><span class="k">new</span><span class="w"> </span><span class="n">PtEdgeAttributes</span><span class="p">(</span><span class="n">GtfsStorage</span><span class="p">.</span><span class="na">EdgeType</span><span class="p">.</span><span class="na">ALIGHT</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">validOn</span><span class="p">,</span><span class="w"> </span><span class="p">...));</span><span class="w">                                 </span><span class="c1">// :291</span>
+<span class="n">out</span><span class="p">.</span><span class="na">createEdge</span><span class="p">(</span><span class="n">arrivalNode</span><span class="p">,</span><span class="w"> </span><span class="n">departureNode</span><span class="p">,</span>
+<span class="w">    </span><span class="k">new</span><span class="w"> </span><span class="n">PtEdgeAttributes</span><span class="p">(</span><span class="n">GtfsStorage</span><span class="p">.</span><span class="na">EdgeType</span><span class="p">.</span><span class="na">DWELL</span><span class="p">,</span><span class="w"> </span><span class="n">stopTime</span><span class="p">.</span><span class="na">departure_time</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">stopTime</span><span class="p">.</span><span class="na">arrival_time</span><span class="p">,...));</span><span class="w"> </span><span class="c1">// :292</span>
+</code></pre></div></figure>
+
+<p>📌 <code>GtfsReader.java:263</code>–<code>:292</code>. <code>wireUpStops</code> connects each stop to the street network with an <code>ENTER_PT</code>
+edge and builds the waiting timeline (<code>:306</code>–<code>:311</code>), so a rider can <em>walk</em> to a stop (road graph, Chapters
+2–3) and then <em>board</em> (transit graph). It all lands in the time-expanded store:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">PtGraph</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">GtfsReader</span><span class="p">.</span><span class="na">PtGraphOut</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="nf">addEdge</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">nodeA</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">nodeB</span><span class="p">,</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">attrPointer</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">   </span><span class="c1">// :120</span>
+</code></pre></div></figure>
+
+<p>📌 <code>reader-gtfs/src/main/java/com/graphhopper/gtfs/PtGraph.java:32</code>,<code>:120</code> — same flat-array,
+<code>DataAccess</code>-backed philosophy as the road <code>BaseGraph</code> (§2.6), with a per-node edge linked list.</p>
+<h2 id="54-the-edge-vocabulary">5.4 The edge vocabulary</h2>
+<p>Every transit movement is one of a small enum of edge types — worth reading once, because a journey is just
+a path that alternates between them:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">enum</span><span class="w"> </span><span class="n">EdgeType</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">HIGHWAY</span><span class="p">,</span><span class="w"> </span><span class="n">ENTER_TIME_EXPANDED_NETWORK</span><span class="p">,</span><span class="w"> </span><span class="n">LEAVE_TIME_EXPANDED_NETWORK</span><span class="p">,</span>
+<span class="w">    </span><span class="n">ENTER_PT</span><span class="p">,</span><span class="w"> </span><span class="n">EXIT_PT</span><span class="p">,</span><span class="w"> </span><span class="n">HOP</span><span class="p">,</span><span class="w"> </span><span class="n">DWELL</span><span class="p">,</span><span class="w"> </span><span class="n">BOARD</span><span class="p">,</span><span class="w"> </span><span class="n">ALIGHT</span><span class="p">,</span><span class="w"> </span><span class="n">OVERNIGHT</span><span class="p">,</span><span class="w"> </span><span class="n">TRANSFER</span><span class="p">,</span><span class="w"> </span><span class="n">WAIT</span><span class="p">,</span><span class="w"> </span><span class="n">WAIT_ARRIVAL</span>
+<span class="p">}</span>
+</code></pre></div></figure>
+
+<p>📌 <code>reader-gtfs/src/main/java/com/graphhopper/gtfs/GtfsStorage.java:173</code>–<code>:175</code>. A typical trip reads:
+<code>ENTER_PT</code> (walk in) → <code>WAIT</code> (until your bus) → <code>BOARD</code> → <code>HOP…HOP</code> (ride, with <code>DWELL</code> at intermediate
+stops) → <code>ALIGHT</code> → <code>TRANSFER</code> (to another line) → … → <code>EXIT_PT</code> (walk out). Counting the <code>BOARD</code>/<code>TRANSFER</code>
+edges on a path <em>is</em> counting the transfers — which is one of the criteria the search minimizes.</p>
+<h2 id="55-raptor-style-multi-criteria-search">5.5 RAPTOR-style multi-criteria search</h2>
+<p>Because "best" is multi-dimensional, GraphHopper doesn't keep <em>one</em> best label per node — it keeps a
+<strong>Pareto set</strong> of non-dominated labels. A <code>Label</code> is the state: arrival time, transfer count, accumulated
+walk time, and a back-pointer:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">currentTime</span><span class="p">;</span><span class="w">      </span><span class="c1">// :43  arrival-time criterion</span>
+<span class="kd">public</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kt">int</span><span class="w">  </span><span class="n">nTransfers</span><span class="p">;</span><span class="w">       </span><span class="c1">// :48  #transfers criterion</span>
+<span class="kd">public</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">streetTime</span><span class="p">;</span><span class="w">       </span><span class="c1">// :51  walking-time criterion</span>
+<span class="kd">public</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">Label</span><span class="w"> </span><span class="n">parent</span><span class="p">;</span><span class="w">          </span><span class="c1">// :58  path reconstruction</span>
+</code></pre></div></figure>
+
+<p>📌 <code>reader-gtfs/src/main/java/com/graphhopper/gtfs/Label.java:23</code>,<code>:43</code>–<code>:58</code>. The search is a
+label-setting algorithm with a priority queue, one label popped at a time, its neighbours explored:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">MultiCriteriaLabelSetting</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">PriorityQueue</span><span class="o">&lt;</span><span class="n">Label</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fromHeap</span><span class="p">;</span><span class="w">   </span><span class="c1">// :62</span>
+<span class="w">    </span><span class="c1">// main loop:</span>
+<span class="w">    </span><span class="n">Label</span><span class="w"> </span><span class="n">label</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fromHeap</span><span class="p">.</span><span class="na">poll</span><span class="p">();</span><span class="w">                                        </span><span class="c1">// :95 (after skipping deleted)</span>
+<span class="w">    </span><span class="n">action</span><span class="p">.</span><span class="na">accept</span><span class="p">(</span><span class="n">label</span><span class="p">);</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">GraphExplorer</span><span class="p">.</span><span class="na">MultiModalEdge</span><span class="w"> </span><span class="n">edge</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">explorer</span><span class="p">.</span><span class="na">exploreEdgesAround</span><span class="p">(</span><span class="n">label</span><span class="p">))</span><span class="w">  </span><span class="c1">// :103</span>
+</code></pre></div></figure>
+
+<p>📌 <code>reader-gtfs/src/main/java/com/graphhopper/gtfs/MultiCriteriaLabelSetting.java:35</code>,<code>:66</code>–<code>:105</code>. The heart
+is <strong>domination</strong> — a label is only kept if no existing label beats it on <em>every</em> criterion:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">private</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">dominates</span><span class="p">(</span><span class="n">Label</span><span class="w"> </span><span class="n">me</span><span class="p">,</span><span class="w"> </span><span class="n">Label</span><span class="w"> </span><span class="n">they</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">weight</span><span class="p">(</span><span class="n">me</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">weight</span><span class="p">(</span><span class="n">they</span><span class="p">))</span><span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="kc">false</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mindTransfers</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">me</span><span class="p">.</span><span class="na">nTransfers</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">they</span><span class="p">.</span><span class="na">nTransfers</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="kc">false</span><span class="p">;</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">weight</span><span class="p">(</span><span class="n">me</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">weight</span><span class="p">(</span><span class="n">they</span><span class="p">))</span><span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mindTransfers</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">me</span><span class="p">.</span><span class="na">nTransfers</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">they</span><span class="p">.</span><span class="na">nTransfers</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">queueComparator</span><span class="p">.</span><span class="na">compare</span><span class="p">(</span><span class="n">me</span><span class="p">,</span><span class="w"> </span><span class="n">they</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></figure>
+
+<p>📌 <code>MultiCriteriaLabelSetting.java:225</code>–<code>:240</code>. New labels are inserted only if not dominated, and they prune
+any existing label they dominate (<code>insertIfNotDominated</code>/<code>removeDominated</code>, <code>:184</code>–<code>:223</code>). The scalar
+<code>weight</code> folds the criteria with tunable betas — how many seconds a transfer or a minute of walking is
+"worth":</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">long</span><span class="w"> </span><span class="nf">weight</span><span class="p">(</span><span class="n">Label</span><span class="w"> </span><span class="n">label</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">timeSinceStartTime</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+<span class="w">         </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="kt">long</span><span class="p">)(</span><span class="n">label</span><span class="p">.</span><span class="na">nTransfers</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">betaTransfers</span><span class="p">)</span>
+<span class="w">         </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="kt">long</span><span class="p">)(</span><span class="n">label</span><span class="p">.</span><span class="na">streetTime</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="n">betaStreetTime</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1.0</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">label</span><span class="p">.</span><span class="na">extraWeight</span><span class="p">;</span><span class="w">   </span><span class="c1">// :243</span>
+<span class="p">}</span>
+</code></pre></div></figure>
+
+<p>📌 <code>MultiCriteriaLabelSetting.java:242</code>–<code>:244</code>.</p>
+<div class="callout note"><span class="ic">🧠</span>
+<p> <strong>Mental model:</strong> road Dijkstra keeps <em>one</em> best entry per node (§3.3); transit keeps a <em>set</em> of
+Pareto-optimal labels per node. "Arrive at 09:40 with 0 transfers" and "arrive at 09:32 with 2 transfers"
+can <em>both</em> be answers — neither dominates the other — so both survive, and the rider (or the UI) picks.</p>
+</div>
+<h2 id="56-the-router-and-realtime">5.6 The router and realtime</h2>
+<p><code>PtRouterImpl</code> wires the search to a request and drives the solution loop:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kd">class</span> <span class="nc">PtRouterImpl</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">PtRouter</span><span class="w"> </span><span class="p">{</span><span class="w">           </span><span class="c1">// :50</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">GHResponse</span><span class="w"> </span><span class="nf">route</span><span class="p">(</span><span class="n">Request</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">                  </span><span class="c1">// :78</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">RequestHandler</span><span class="p">(</span><span class="n">request</span><span class="p">).</span><span class="na">route</span><span class="p">();</span>
+<span class="w">    </span><span class="c1">// ...builds the label-setting search:</span>
+<span class="w">    </span><span class="n">router</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">MultiCriteriaLabelSetting</span><span class="p">(</span><span class="n">graphExplorer</span><span class="p">,</span><span class="w"> </span><span class="n">arriveBy</span><span class="p">,</span><span class="w"> </span><span class="o">!</span><span class="n">ignoreTransfers</span><span class="p">,</span><span class="w"> </span><span class="p">...);</span><span class="w">  </span><span class="c1">// :240</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">Label</span><span class="w"> </span><span class="n">label</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">router</span><span class="p">.</span><span class="na">calcLabels</span><span class="p">(</span><span class="n">startNode</span><span class="p">,</span><span class="w"> </span><span class="n">initialTime</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span><span class="w">                    </span><span class="c1">// :259</span>
+</code></pre></div></figure>
+
+<p>📌 <code>reader-gtfs/src/main/java/com/graphhopper/gtfs/PtRouterImpl.java:50</code>,<code>:78</code>,<code>:240</code>,<code>:259</code> (path
+reconstruction via <code>findPaths</code>, <code>:195</code>). Live delays arrive as <strong>GTFS-realtime</strong> protobuf and are folded in
+without rebuilding the graph — a <code>RealtimeFeed</code> holds blocked edges and per-edge delay maps that the search
+consults:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">RealtimeFeed</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">IntHashSet</span><span class="w"> </span><span class="n">blockedEdges</span><span class="p">;</span><span class="w">                 </span><span class="c1">// :50  cancelled trips/stops</span>
+<span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">IntLongHashMap</span><span class="w"> </span><span class="n">delaysForBoardEdges</span><span class="p">;</span><span class="w">      </span><span class="c1">// :51</span>
+<span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">IntLongHashMap</span><span class="w"> </span><span class="n">delaysForAlightEdges</span><span class="p">;</span><span class="w">     </span><span class="c1">// :52</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">RealtimeFeed</span><span class="w"> </span><span class="nf">fromProtobuf</span><span class="p">(</span><span class="n">GtfsStorage</span><span class="w"> </span><span class="n">staticGtfs</span><span class="p">,</span><span class="w"> </span><span class="p">...,</span><span class="w"> </span><span class="n">feedMessages</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">   </span><span class="c1">// :73</span>
+</code></pre></div></figure>
+
+<p>📌 <code>reader-gtfs/src/main/java/com/graphhopper/gtfs/RealtimeFeed.java:48</code>–<code>:73</code>. The static schedule graph
+stays put; realtime is an <em>overlay</em> of delays and blocks the label search reads as it goes.</p>
+<div class="callout tip"><span class="ic">💡</span>
+<p> GraphHopper 11 also ships a newer <strong>trip-based</strong> transit router (<code>PtRouterTripBasedImpl</code> +
+<code>TripBasedRouter</code>) alongside this schedule/label-setting one. The label-setting router read here is the
+most instructive — it makes the multi-criteria idea explicit — so it's the one this book teaches.</p>
+</div>
+<h2 id="57-lab-5-plan-a-journey">5.7 Lab 5 — plan a journey</h2>
+<div class="callout lab"><span class="ic">🧪</span>
+<p> <strong>Lab 5.</strong> Server lab (imports a GTFS feed). Goal: run a <code>pt</code> query and read its legs and transfers.
+Record in <a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab05-transit.md"><code>labs/lab05-transit.md</code></a>.</p>
+</div>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/Documents/learning/graphhopper
+<span class="c1"># confirm the edge vocabulary and the domination rule resolve:</span>
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;173,175p&#39;</span><span class="w"> </span>reader-gtfs/src/main/java/com/graphhopper/gtfs/GtfsStorage.java
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;225,244p&#39;</span><span class="w"> </span>reader-gtfs/src/main/java/com/graphhopper/gtfs/MultiCriteriaLabelSetting.java
+
+<span class="c1"># start a server with a GTFS feed (add a `pt` profile + gtfs.file to your config), then:</span>
+curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:8989/route?point=STOP_A_LAT,STOP_A_LON&amp;point=STOP_B_LAT,STOP_B_LON\</span>
+<span class="s2">&amp;profile=pt&amp;pt.earliest_departure_time=2026-07-06T08:00:00Z&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json;d=json.load(sys.stdin);p=d[&#39;paths&#39;][0];\</span>
+<span class="s2">legs=p.get(&#39;legs&#39;,[]);print(&#39;min&#39;,round(p[&#39;time&#39;]/60000,1),&#39;transfers&#39;,sum(1 for l in legs if l.get(&#39;type&#39;)==&#39;pt&#39;)-1 if legs else &#39;?&#39;,&#39;legs&#39;,len(legs))&quot;</span>
+</code></pre></div></figure>
+
+<p><strong>Expected:</strong> <code>GtfsStorage.java:174</code> lists <code>HOP, DWELL, BOARD, ALIGHT, … TRANSFER, WAIT</code>;
+<code>MultiCriteriaLabelSetting.java:225</code> is <code>private boolean dominates(...)</code>; and the <code>pt</code> query returns a path
+with <code>legs</code> alternating walk and <code>pt</code>, a travel time, and a transfer count RAPTOR minimized. (You supply a
+small GTFS feed and enable a <code>pt</code> profile — the lab note lists the config keys.)</p>
+<h2 id="58-checkpoint">5.8 Checkpoint</h2>
+<ol>
+<li>Why is the transit graph "time-expanded"? What is a <em>node</em> here, versus a node in the road graph?</li>
+<li>Name the edge types a single bus trip touches from walking in to walking out. Which one counts as a
+   transfer?</li>
+<li>Road Dijkstra keeps one best label per node; the transit search keeps a <em>set</em>. Why — and what does
+   "dominates" mean?</li>
+<li>Two answers survive: "09:40, 0 transfers" and "09:32, 2 transfers." Which is correct, and how does the
+   engine decide what to return?</li>
+<li>A bus is running 5 minutes late. How does that reach the search <em>without</em> rebuilding the graph?</li>
+</ol>
+<div class="callout note">
+<p>If #1 is shaky, re-read §5.2. If #3 is shaky, re-read §5.5.</p>
+</div>
+<h2 class="connect" id="connect-to-your-past-this-is-busmaps-engine">🔌 Connect to your past (this is BusMap's engine)</h2>
+<p>You have built this product. BusMap's "from here to there by bus" is <code>PtRouterImpl.route</code>; the "2 changes,
+7 min walk, arrive 08:41" your UI renders is a <code>Label</code>'s <code>nTransfers</code> / <code>streetTime</code> / <code>currentTime</code>; the
+setting where a user says "fewer transfers, I don't mind walking" is <code>betaTransfers</code> vs <code>betaStreetTime</code> in
+the <code>weight</code> function (§5.5). VinBus's live ETA — "your bus is 4 minutes late, you'll now arrive 08:45" — is
+exactly the GTFS-realtime overlay in <code>RealtimeFeed</code>: the static schedule graph unchanged, a delay map on
+top. Everything you may have hand-rolled for a transit app — the multi-criteria trade-off, the walk+ride
+composition, the realtime patch — is here as one readable module. Read <code>MultiCriteriaLabelSetting</code> once and
+you'll never look at your own journey planner the same way.</p>
+<p><strong>Next:</strong> road routing and transit both assume you <em>know</em> where you are on the map. But a moving vehicle
+only has noisy GPS. Chapter 6 snaps it back onto the roads.
+→ <strong><a href="06-map-matching.html">Chapter 06 — Map-Matching</a></strong></p>
+    <nav class="pager"><a class="prev" href="04-profiles-weighting-custom-models.html"><span class="lbl">← Previous</span><span class="ttl">Profiles, Weighting &amp; Custom Models</span></a><a class="next" href="06-map-matching.html"><span class="lbl">Next →</span><span class="ttl">Map-Matching — snapping GPS to roads</span></a></nav>
+  </article></main>
+  <aside class="toc"><nav><h4>On this page</h4>
+<a class="lvl-2" href="#51-why-it-matters">5.1 Why it matters</a>
+<a class="lvl-2" href="#52-mental-model-fold-time-into-the-graph">5.2 Mental model: fold time into the graph</a>
+<a class="lvl-2" href="#53-gtfs-ptgraph">5.3 GTFS → PtGraph</a>
+<a class="lvl-2" href="#54-the-edge-vocabulary">5.4 The edge vocabulary</a>
+<a class="lvl-2" href="#55-raptor-style-multi-criteria-search">5.5 RAPTOR-style multi-criteria search</a>
+<a class="lvl-2" href="#56-the-router-and-realtime">5.6 The router and realtime</a>
+<a class="lvl-2" href="#57-lab-5-plan-a-journey">5.7 Lab 5 — plan a journey</a>
+<a class="lvl-2" href="#58-checkpoint">5.8 Checkpoint</a>
+<a class="lvl-2" href="#connect-to-your-past-this-is-busmaps-engine">🔌 Connect to your past (this is BusMap&#x27;s engine)</a>
+</nav></aside>
+</div>
+<footer class="site-foot">
+  <a class="foot-brand" href="https://rumitx.com" target="_blank" rel="noopener"><span class="foot-x">X</span> RumitX</a>
+  GraphHopper Internals Handbook · grounded in <a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener">graphhopper/graphhopper</a>
+  @ <code>11.0</code> · maps &amp; route-finding, from the source<br>
+  A <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> publication · maps, routing &amp; human-centric mobility
+</footer>
+<script src="assets/app.js"></script>
+</body>
+</html>

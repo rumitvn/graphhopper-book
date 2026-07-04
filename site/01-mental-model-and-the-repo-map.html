@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 01 — Mental Model &amp; the Repo Map · GraphHopper Internals Handbook · RumitX</title>
+<meta name="description" content="From-the-source handbook on graphhopper/graphhopper: how an open-source routing engine turns a map into a graph and finds the fastest route — Dijkstra, A*, Contraction Hierarchies, GTFS/RAPTOR transit, and map-matching.">
+<link rel="icon" type="image/svg+xml" href="assets/brand/logo_x.svg">
+<meta name="author" content="RumitX">
+<meta name="theme-color" content="#0B1E2D">
+<link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/code.css">
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<header class="header">
+  <button class="icon-btn" id="menu-btn" aria-label="Open navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+  <a class="brand" href="index.html"><span class="mark"><span>X</span></span> GraphHopper Internals Handbook</a>
+  <span class="spacer"></span>
+  <span class="meta-pill">pinned&nbsp;11.0</span>
+  <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+</header>
+<div class="backdrop"></div>
+<div class="shell">
+  <aside class="rail"><nav>
+<a class="brand-mini" href="index.html"><img src="assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
+<h4>Chapters</h4>
+<a class="" href="00-environment-and-java-refresher.html"><span class="num">00</span><span>Environment &amp; Java Refresher</span></a>
+<a class="active" href="01-mental-model-and-the-repo-map.html"><span class="num">01</span><span>Mental Model &amp; the Repo Map</span></a>
+<a class="" href="02-the-graph-map-to-network.html"><span class="num">02</span><span>The Graph — turning a map into a routable network</span></a>
+<a class="" href="03-shortest-path-algorithms.html"><span class="num">03</span><span>The Shortest-Path Algorithm Family</span><span class="flag">★</span></a>
+<a class="" href="04-profiles-weighting-custom-models.html"><span class="num">04</span><span>Profiles, Weighting &amp; Custom Models</span></a>
+<a class="" href="05-public-transit-gtfs-raptor.html"><span class="num">05</span><span>Public Transit — GTFS &amp; RAPTOR</span></a>
+<a class="" href="06-map-matching.html"><span class="num">06</span><span>Map-Matching — snapping GPS to roads</span></a>
+<a class="" href="07-navigation-isochrones-web.html"><span class="num">07</span><span>Navigation, Isochrones &amp; the Web/Tiles Surface</span></a>
+<a class="" href="08-capstone-and-staying-current.html"><span class="num">08</span><span>Capstone &amp; Staying Current</span></a>
+<h4>Reference</h4>
+<a class="" href="glossary.html"><span class="num">§</span><span>Glossary &amp; Index</span></a>
+<a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener"><span class="num">↗</span><span>GitHub repo</span></a>
+</nav></aside>
+  <main class="content"><article class="article">
+    <div class="crumbs"><a href="index.html">Handbook</a> / Chapter 01</div>
+    <h1 id="chapter-01-mental-model-the-repo-map">Chapter 01 — Mental Model &amp; the Repo Map</h1>
+<div class="callout goal">
+<p><strong>Goal:</strong> Hold the whole engine in your head at once. After this chapter you can name GraphHopper's four
+layers — <strong>import → store → query → shape</strong> — point at the module each lives in, and trace a single
+<code>/route?point=A&amp;point=B</code> request hop by hop from the HTTP resource to the <code>ResponsePath</code> it returns and
+back out as JSON. Pinned to <strong><code>11.0</code></strong> (<code>69e50f6</code>).</p>
+</div>
+<h2 id="11-why-it-matters">1.1 Why it matters</h2>
+<p>A routing engine sounds like one thing — "find the shortest path" — but it is really <strong>four</strong> things, and
+they run at different times. If you don't separate them, the code looks like a maze; once you do, every
+file has an obvious home:</p>
+<ol>
+<li><strong>Import</strong> — turn a map file (<code>.osm.pbf</code>) into an internal graph. Runs once.</li>
+<li><strong>Store</strong> — keep that graph in compact, memory-mappable form on disk (<code>graph-cache/</code>). Persists.</li>
+<li><strong>Query</strong> — given two points, run an algorithm over the stored graph. Runs per request, in ~1 ms.</li>
+<li><strong>Shape</strong> — turn the raw edge sequence into what a client wants: turn instructions, geometry, an ETA.</li>
+</ol>
+<p>The whole rest of this book is a tour of those four layers. This chapter draws the map so the later
+chapters are "go deeper on a box you've already placed," not "where does this even live?"</p>
+<h2 id="12-mental-model-import-store-query-shape">1.2 Mental model: import → store → query → shape</h2>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">text</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code>   OSM .pbf                                          graph-cache/ (on disk)
+      │                                                    ▲   │
+      ▼                                                    │   ▼
+┌───────────┐   BaseGraph    ┌──────────────┐  CH/LM prep  │  ┌──────────────────────────────┐
+│  IMPORT   │ ─────────────▶ │    STORE     │ ────────────▶│  │           QUERY              │
+│ OSMReader │  nodes+edges   │ DataAccess   │  shortcuts   │  │ Router → RoutingAlgorithm    │
+│  (core)   │                │ (flat arrays)│  landmarks   │  │  Dijkstra / A* / CH / LM     │
+└───────────┘                └──────────────┘              │  └──────────────┬───────────────┘
+   Chapter 2                     Chapter 2                     Chapter 3      │ ResponsePath
+                                                                             ▼
+   ┌─────────────────────────────────────────────────────────────┐  ┌───────────────┐
+   │  SHAPE: InstructionsFromEdges → InstructionList, PathDetail   │  │  web layer     │
+   │         (Chapter 7)                                           │◀─│ RouteResource  │──▶ JSON
+   └─────────────────────────────────────────────────────────────┘  └───────────────┘
+                                                                        Chapter 1 (this trace)
+</code></pre></div></figure>
+
+<p>Two things to hold. First, <strong>import + store happen before any request</strong> — that's the <code>importOrLoad()</code>
+phase from §0.5. By the time a <code>/route</code> arrives, the graph, the Contraction-Hierarchies shortcuts, and the
+landmarks are already built and memory-mapped; a query only <em>reads</em>. Second, the <strong>web layer is thin</strong> —
+it parses a request, calls one method, and serializes the answer. Everything interesting is below it.</p>
+<h2 id="13-the-module-map">1.3 The module map</h2>
+<p>Map the four layers onto the Maven modules from §0.3:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Lives in</th>
+<th>Star symbols</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Import</td>
+<td><code>core</code></td>
+<td><code>OSMReader</code>, <code>WaySegmentParser</code></td>
+</tr>
+<tr>
+<td>Store</td>
+<td><code>core</code></td>
+<td><code>BaseGraph</code>, <code>DataAccess</code>, <code>EdgeIterator</code>, <code>TurnCostStorage</code></td>
+</tr>
+<tr>
+<td>Query</td>
+<td><code>core</code></td>
+<td><code>Router</code>, <code>RoutingAlgorithm</code>, <code>Dijkstra</code>, <code>AStar</code>, CH (<code>ch/</code>), Landmarks (<code>lm/</code>)</td>
+</tr>
+<tr>
+<td>Shape</td>
+<td><code>core</code> + <code>web-api</code></td>
+<td><code>InstructionsFromEdges</code> (core), <code>Instruction</code>/<code>ResponsePath</code> (web-api)</td>
+</tr>
+<tr>
+<td>Transit</td>
+<td><code>reader-gtfs</code></td>
+<td><code>GtfsReader</code>, <code>PtGraph</code>, <code>MultiCriteriaLabelSetting</code></td>
+</tr>
+<tr>
+<td>Map-matching</td>
+<td><code>map-matching</code></td>
+<td><code>MapMatching</code>, <code>HmmProbabilities</code></td>
+</tr>
+<tr>
+<td>HTTP surface</td>
+<td><code>web-bundle</code> + <code>web</code></td>
+<td><code>RouteResource</code>, <code>IsochroneResource</code>, <code>GraphHopperApplication</code></td>
+</tr>
+<tr>
+<td>Request/response objects</td>
+<td><code>web-api</code></td>
+<td><code>GHRequest</code>, <code>GHResponse</code>, <code>ResponsePath</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="callout note"><span class="ic">🧠</span>
+<p> <strong>Mental model:</strong> <code>core</code> is the engine; <code>web-api</code> is the <em>vocabulary</em> the engine and the outside world
+share (<code>GHRequest</code>/<code>GHResponse</code>); <code>web-bundle</code> + <code>web</code> are the HTTP skin. The transit and map-matching
+modules are peers of <code>core</code> that reuse its graph and algorithms.</p>
+</div>
+<h2 id="14-one-request-end-to-end">1.4 One request, end to end</h2>
+<p>Let's follow <code>GET /route?point=52.52,13.39&amp;point=52.50,13.42&amp;profile=car</code> through every hop. Open each
+file as we go.</p>
+<p><strong>Hop 1 — the HTTP resource.</strong> The endpoint is a JAX-RS resource:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nd">@Path</span><span class="p">(</span><span class="s">&quot;route&quot;</span><span class="p">)</span>
+<span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">RouteResource</span><span class="w"> </span><span class="p">{</span>
+</code></pre></div></figure>
+
+<p>📌 <code>web-bundle/src/main/java/com/graphhopper/resources/RouteResource.java:57</code>–<code>:58</code>. The <code>GET</code> handler
+(<code>:82</code>–<code>:108</code>) declares the query parameters, including the repeated <code>point</code> and the <code>profile</code>:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nd">@QueryParam</span><span class="p">(</span><span class="s">&quot;point&quot;</span><span class="p">)</span><span class="w"> </span><span class="nd">@NotNull</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">GHPointParam</span><span class="o">&gt;</span><span class="w"> </span><span class="n">pointParams</span><span class="p">,</span><span class="w">   </span><span class="c1">// :89</span>
+<span class="nd">@QueryParam</span><span class="p">(</span><span class="s">&quot;profile&quot;</span><span class="p">)</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">profileName</span><span class="p">,</span><span class="w">                      </span><span class="c1">// :96</span>
+</code></pre></div></figure>
+
+<p><strong>Hop 2 — params become a <code>GHRequest</code>.</strong> The resource assembles the same domain object you built by hand
+in §0.4:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">GHRequest</span><span class="w"> </span><span class="n">request</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">GHRequest</span><span class="p">();</span><span class="w">                 </span><span class="c1">// :116</span>
+<span class="c1">// ...</span>
+<span class="n">request</span><span class="p">.</span><span class="na">setPoints</span><span class="p">(</span><span class="n">points</span><span class="p">).</span><span class="na">setProfile</span><span class="p">(</span><span class="n">profileName</span><span class="p">)</span>
+<span class="w">       </span><span class="p">.</span><span class="na">setAlgorithm</span><span class="p">(</span><span class="n">algoStr</span><span class="p">).</span><span class="na">setLocale</span><span class="p">(</span><span class="n">localeStr</span><span class="p">);</span><span class="w">  </span><span class="c1">// :122–:133</span>
+</code></pre></div></figure>
+
+<p>📌 <code>RouteResource.java:116</code>–<code>:133</code>. A little profile resolution runs first (<code>:145</code>–<code>:152</code>), then the one
+line that crosses from the web layer into the engine:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">GHResponse</span><span class="w"> </span><span class="n">ghResponse</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">graphHopper</span><span class="p">.</span><span class="na">route</span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
+</code></pre></div></figure>
+
+<p>📌 <code>RouteResource.java:154</code>. Everything above this line is HTTP; everything below is the engine. If the
+response has errors, the resource maps them to HTTP 400 (<code>:159</code>–<code>:165</code>).</p>
+<p><strong>Hop 3 — the façade builds a fresh <code>Router</code>.</strong> <code>GraphHopper.route</code> is tiny — and revealing:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="n">GHResponse</span><span class="w"> </span><span class="nf">route</span><span class="p">(</span><span class="n">GHRequest</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">createRouter</span><span class="p">().</span><span class="na">route</span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/GraphHopper.java:1333</code>–<code>:1335</code>. <code>createRouter()</code> (<code>:1337</code>–<code>:1347</code>)
+checks the engine is fully loaded, then <code>doCreateRouter()</code> (<code>:1349</code>–<code>:1355</code>) constructs <code>new Router(...)</code>,
+handing it the <code>baseGraph</code>, the <code>encodingManager</code>, the <code>locationIndex</code>, the profiles, and — crucially —
+the prepared <strong>CH graphs</strong> and <strong>landmarks</strong>.</p>
+<div class="callout note"><span class="ic">🧠</span>
+<p> <strong>Mental model:</strong> a <code>Router</code> is created <strong>per request</strong>, but it's cheap — it just wires references to
+the already-built, shared, read-only structures. The heavy stuff (the graph, the shortcuts) was built at
+import time and is never rebuilt. This is the import/query split made concrete.</p>
+</div>
+<p><strong>Hop 4 — the <code>Router</code> validates and dispatches.</strong> The class is <code>Router.java:58</code>; its <code>route</code> method is
+the real orchestration:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="n">GHResponse</span><span class="w"> </span><span class="nf">route</span><span class="p">(</span><span class="n">GHRequest</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">checkNoLegacyParameters</span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
+<span class="w">        </span><span class="n">checkAtLeastOnePoint</span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
+<span class="w">        </span><span class="n">checkIfPointsAreInBoundsAndNotNull</span><span class="p">(</span><span class="n">request</span><span class="p">.</span><span class="na">getPoints</span><span class="p">());</span>
+<span class="w">        </span><span class="c1">// ...</span>
+<span class="w">        </span><span class="n">Solver</span><span class="w"> </span><span class="n">solver</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">createSolver</span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
+<span class="w">        </span><span class="n">solver</span><span class="p">.</span><span class="na">checkRequest</span><span class="p">();</span>
+<span class="w">        </span><span class="n">solver</span><span class="p">.</span><span class="na">init</span><span class="p">();</span>
+<span class="w">        </span><span class="c1">// ...</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">routeVia</span><span class="p">(</span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">);</span>
+</code></pre></div></figure>
+
+<p>📌 <code>Router.java:97</code>–<code>:120</code>. The one decision that determines everything about <em>how fast</em> the query runs is
+which solver it creates:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">chEnabled</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">disableCH</span><span class="p">)</span><span class="w">      </span><span class="c1">// Contraction Hierarchies — fastest, fixed weighting</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">createCHSolver</span><span class="p">(...);</span>
+<span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lmEnabled</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">disableLM</span><span class="p">)</span><span class="w"> </span><span class="c1">// Landmarks/ALT — fast, flexible weighting</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">createLMSolver</span><span class="p">(...);</span>
+<span class="k">else</span><span class="w">                              </span><span class="c1">// plain bidirectional Dijkstra/A* — slowest, fully flexible</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">createFlexSolver</span><span class="p">(...);</span>
+</code></pre></div></figure>
+
+<p>📌 <code>Router.java:190</code>–<code>:198</code> (<code>chEnabled</code>/<code>lmEnabled</code> were set at <code>:88</code>–<code>:89</code> from whether CH graphs /
+landmarks exist). That three-way choice <strong>is</strong> Chapter 3.</p>
+<p><strong>Hop 5 — the answer comes back.</strong> The solver runs an algorithm (Chapter 3), builds a <code>ResponsePath</code> with
+geometry, distance, time and instructions (Chapter 7), and the resource pulls the best one:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="n">ResponsePath</span><span class="w"> </span><span class="nf">getBest</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">responsePaths</span><span class="p">.</span><span class="na">get</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div></figure>
+
+<p>📌 <code>web-api/src/main/java/com/graphhopper/GHResponse.java:48</code>. <code>RouteResource</code> serializes it to JSON and
+writes HTTP 200. Request complete.</p>
+<h2 id="15-the-one-insight-to-keep">1.5 The one insight to keep</h2>
+<p>Every <code>/route</code> call funnels through <strong>one method</strong> (<code>GraphHopper.route</code>, <code>:1333</code>) into <strong>one dispatcher</strong>
+(<code>Router.route</code>, <code>:97</code>) that makes <strong>one choice</strong> (CH vs LM vs flexible, <code>:190</code>). If you remember only
+that spine, you can find your way into any routing behaviour in the codebase from the outside in.</p>
+<h2 id="16-lab-1-trace-the-request-yourself">1.6 Lab 1 — trace the request yourself</h2>
+<div class="callout lab"><span class="ic">🧪</span>
+<p> <strong>Lab 1.</strong> No build needed beyond Chapter 0's server. Goal: confirm the trace by reading the six hops
+and by watching the request from the outside. Record in <a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab01-trace.md"><code>labs/lab01-trace.md</code></a>.</p>
+</div>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/Documents/learning/graphhopper
+<span class="c1"># read each hop and confirm the line resolves to the symbol:</span>
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;57,58p;89p;96p;154p&#39;</span><span class="w"> </span>web-bundle/src/main/java/com/graphhopper/resources/RouteResource.java
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;1333,1335p&#39;</span><span class="w"> </span>core/src/main/java/com/graphhopper/GraphHopper.java
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;58p;97,120p;190,198p&#39;</span><span class="w"> </span>core/src/main/java/com/graphhopper/routing/Router.java
+
+<span class="c1"># now the outside view — with the Chapter 0 server running:</span>
+python3<span class="w"> </span>~/Documents/learning/graphhopper-book/labs/query_route/query.py<span class="w"> </span><span class="m">52</span>.517,13.389<span class="w"> </span><span class="m">52</span>.508,13.421
+curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:8989/route?point=52.517,13.389&amp;point=52.508,13.421&amp;profile=car&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-c<span class="w"> </span><span class="m">400</span>
+</code></pre></div></figure>
+
+<p><strong>Expected:</strong> <code>RouteResource.java:154</code> reads <code>GHResponse ghResponse = graphHopper.route(request);</code>;
+<code>GraphHopper.java:1333</code> reads <code>public GHResponse route(GHRequest request)</code>; <code>Router.java:190</code>–<code>:198</code> shows
+the CH/LM/flex branch. <code>query.py</code> prints a distance/time line; the <code>curl</code> shows a JSON body with a
+<code>paths</code> array and an <code>info.took</code> in milliseconds. Note that <code>took</code> — that's the whole query, and it's tiny.</p>
+<h2 id="17-checkpoint">1.7 Checkpoint</h2>
+<ol>
+<li>Name GraphHopper's four layers and say which run <em>before</em> a request arrives vs <em>per</em> request.</li>
+<li>A <code>/route</code> request enters the engine at exactly one line. Which file:line, and what is above vs below it?</li>
+<li>Why does <code>GraphHopper.route</code> build a <strong>new <code>Router</code> every request</strong>, and why is that not expensive?</li>
+<li><code>Router.route</code> makes one three-way decision that sets the query's speed. What are the three options and
+   what does each trade off?</li>
+<li>Which module holds <code>GHRequest</code>/<code>GHResponse</code>, and why does it sit <em>between</em> <code>core</code> and the web layer?</li>
+</ol>
+<div class="callout note">
+<p>If #2 is shaky, re-read §1.4 Hop 2–3. If #4 is shaky, re-read §1.4 Hop 4 and hold it for Chapter 3.</p>
+</div>
+<h2 class="connect" id="connect-to-your-past-your-app-already-calls-this-boundary">🔌 Connect to your past (your app already calls this boundary)</h2>
+<p>Whatever routing your app does today, it crosses exactly the boundary you just traced — usually as an HTTP
+call to a routing service. BusMap asking "how do I get from stop A to stop B", a ride-hailing backend
+asking "what's the ETA from the driver to the rider" — both send the equivalent of a <code>GHRequest</code> and read
+back the equivalent of a <code>ResponsePath</code>. What this chapter gives you is the <em>other side</em> of that call: the
+<code>RouteResource</code> → <code>GraphHopper.route</code> → <code>Router</code> → <code>ResponsePath</code> spine your requests have been hitting all
+along. From here on, when your app makes a routing call, you'll know what the server does with it in the
+millisecond before it answers.</p>
+<p><strong>Next:</strong> the query layer needs something to walk. Let's build it — how an OSM file becomes the
+<code>BaseGraph</code> every algorithm sweeps. → <strong><a href="02-the-graph-map-to-network.html">Chapter 02 — The Graph</a></strong></p>
+    <nav class="pager"><a class="prev" href="00-environment-and-java-refresher.html"><span class="lbl">← Previous</span><span class="ttl">Environment &amp; Java Refresher</span></a><a class="next" href="02-the-graph-map-to-network.html"><span class="lbl">Next →</span><span class="ttl">The Graph — turning a map into a routable network</span></a></nav>
+  </article></main>
+  <aside class="toc"><nav><h4>On this page</h4>
+<a class="lvl-2" href="#11-why-it-matters">1.1 Why it matters</a>
+<a class="lvl-2" href="#12-mental-model-import-store-query-shape">1.2 Mental model: import → store → query → shape</a>
+<a class="lvl-2" href="#13-the-module-map">1.3 The module map</a>
+<a class="lvl-2" href="#14-one-request-end-to-end">1.4 One request, end to end</a>
+<a class="lvl-2" href="#15-the-one-insight-to-keep">1.5 The one insight to keep</a>
+<a class="lvl-2" href="#16-lab-1-trace-the-request-yourself">1.6 Lab 1 — trace the request yourself</a>
+<a class="lvl-2" href="#17-checkpoint">1.7 Checkpoint</a>
+<a class="lvl-2" href="#connect-to-your-past-your-app-already-calls-this-boundary">🔌 Connect to your past (your app already calls this boundary)</a>
+</nav></aside>
+</div>
+<footer class="site-foot">
+  <a class="foot-brand" href="https://rumitx.com" target="_blank" rel="noopener"><span class="foot-x">X</span> RumitX</a>
+  GraphHopper Internals Handbook · grounded in <a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener">graphhopper/graphhopper</a>
+  @ <code>11.0</code> · maps &amp; route-finding, from the source<br>
+  A <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> publication · maps, routing &amp; human-centric mobility
+</footer>
+<script src="assets/app.js"></script>
+</body>
+</html>

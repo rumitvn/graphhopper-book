@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 03 — The Shortest-Path Algorithm Family ★ · GraphHopper Internals Handbook · RumitX</title>
+<meta name="description" content="From-the-source handbook on graphhopper/graphhopper: how an open-source routing engine turns a map into a graph and finds the fastest route — Dijkstra, A*, Contraction Hierarchies, GTFS/RAPTOR transit, and map-matching.">
+<link rel="icon" type="image/svg+xml" href="assets/brand/logo_x.svg">
+<meta name="author" content="RumitX">
+<meta name="theme-color" content="#0B1E2D">
+<link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/code.css">
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<header class="header">
+  <button class="icon-btn" id="menu-btn" aria-label="Open navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+  <a class="brand" href="index.html"><span class="mark"><span>X</span></span> GraphHopper Internals Handbook</a>
+  <span class="spacer"></span>
+  <span class="meta-pill">pinned&nbsp;11.0</span>
+  <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+</header>
+<div class="backdrop"></div>
+<div class="shell">
+  <aside class="rail"><nav>
+<a class="brand-mini" href="index.html"><img src="assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
+<h4>Chapters</h4>
+<a class="" href="00-environment-and-java-refresher.html"><span class="num">00</span><span>Environment &amp; Java Refresher</span></a>
+<a class="" href="01-mental-model-and-the-repo-map.html"><span class="num">01</span><span>Mental Model &amp; the Repo Map</span></a>
+<a class="" href="02-the-graph-map-to-network.html"><span class="num">02</span><span>The Graph — turning a map into a routable network</span></a>
+<a class="active" href="03-shortest-path-algorithms.html"><span class="num">03</span><span>The Shortest-Path Algorithm Family</span><span class="flag">★</span></a>
+<a class="" href="04-profiles-weighting-custom-models.html"><span class="num">04</span><span>Profiles, Weighting &amp; Custom Models</span></a>
+<a class="" href="05-public-transit-gtfs-raptor.html"><span class="num">05</span><span>Public Transit — GTFS &amp; RAPTOR</span></a>
+<a class="" href="06-map-matching.html"><span class="num">06</span><span>Map-Matching — snapping GPS to roads</span></a>
+<a class="" href="07-navigation-isochrones-web.html"><span class="num">07</span><span>Navigation, Isochrones &amp; the Web/Tiles Surface</span></a>
+<a class="" href="08-capstone-and-staying-current.html"><span class="num">08</span><span>Capstone &amp; Staying Current</span></a>
+<h4>Reference</h4>
+<a class="" href="glossary.html"><span class="num">§</span><span>Glossary &amp; Index</span></a>
+<a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener"><span class="num">↗</span><span>GitHub repo</span></a>
+</nav></aside>
+  <main class="content"><article class="article">
+    <div class="crumbs"><a href="index.html">Handbook</a> / Chapter 03</div>
+    <h1 id="chapter-03-the-shortest-path-algorithm-family">Chapter 03 — The Shortest-Path Algorithm Family ★</h1>
+<div class="callout goal">
+<p><strong>Goal:</strong> Understand how GraphHopper finds the fastest route across a continent in about a millisecond.
+We'll do it in <strong>four case studies</strong>: (A) plain <strong>Dijkstra</strong> and the pluggable <code>Weighting</code>; (B) <strong>A*</strong>
+and the <strong>bidirectional</strong> meeting condition; (C) <strong>Contraction Hierarchies</strong> and <em>why</em> it's ~1000×
+faster; and (D) <strong>Landmarks / ALT</strong> for when you can't precompute. By the end you can explain what each
+trades away and point at where every one of them calls <code>Weighting.calcEdgeWeight</code>. Pinned to <strong><code>11.0</code></strong>
+(<code>69e50f6</code>).</p>
+</div>
+<p>This is the flagship chapter, and the longest, because this is where a routing engine earns its name.
+Everything before it <em>builds</em> the graph; everything after it <em>shapes</em> or <em>specializes</em> the search you're
+about to read.</p>
+<h2 id="31-why-it-matters">3.1 Why it matters</h2>
+<p>Dijkstra's algorithm is 65 years old and fits on a napkin. So why is there a whole family here? Because a
+napkin Dijkstra over a graph of tens of millions of nodes takes <em>seconds</em>, and a routing API has a
+<em>millisecond</em> budget. The entire family is a sequence of answers to one question — "how do we get the same
+optimal path, but visit far less of the graph?" — and each answer trades away something (memory,
+preprocessing time, or the freedom to change the cost function) to buy speed.</p>
+<p>For you, this is also the ETA chapter. Every "how long from here to there" a ride-hailing or navigation
+app shows is a shortest-path query underneath. Knowing which algorithm answers it — and what each one
+assumes — is the difference between "the ETA is slow and I don't know why" and "we're on the flexible
+path because our weighting changes per request; here's the fix."</p>
+<h2 id="32-mental-model-shrink-the-search-frontier">3.2 Mental model: shrink the search frontier</h2>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">text</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code>  Dijkstra (uninformed)        A* (goal-directed)           CH (hierarchical)
+  ┌───────────────────┐        ┌───────────────────┐        ┌───────────────────┐
+  │        ....        │        │        ..          │        │   S ─▶▲            │
+  │      ..S....       │        │      ..S▶.         │        │       ▲  (only     │
+  │    ....(o)....  T  │        │     ...▶▶▶.  T      │        │        ▲  climb to │
+  │      ......        │        │        .▶.         │        │         ▲ higher-  │
+  │        ....        │        │                    │        │          ▲ level   │
+  └───────────────────┘        └───────────────────┘        │   T ─▶▶▶▶▶ shortcuts│
+   settles a growing disc        heuristic pulls toward T     └───────────────────┘
+   around S until it hits T      → fewer settled nodes         meet in the middle,
+                                                               skipping via shortcuts
+</code></pre></div></figure>
+
+<p>Three moves. <strong>A*</strong> adds a <em>heuristic</em> — an optimistic guess of the remaining distance — so the frontier
+stretches toward the target instead of ballooning in all directions. <strong>Bidirectional</strong> search runs two
+frontiers, one from each end, and stops when they meet — each explores half the radius. <strong>Contraction
+Hierarchies</strong> goes further: it <em>preprocesses</em> the graph into levels and adds "shortcut" edges, so a query
+only ever climbs to more-important roads and meets in the middle, skipping thousands of local nodes.
+<strong>Landmarks/ALT</strong> is A<em> with a </em>much* better heuristic derived from precomputed distances to a few anchor
+nodes — the fallback when CH's fixed weighting won't do.</p>
+<p>Everything below funnels edge costs through <strong>one</strong> interface. Meet it first:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">interface</span> <span class="nc">Weighting</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="nf">calcMinWeightPerDistance</span><span class="p">();</span><span class="w">                                  </span><span class="c1">// :35  (heuristic lower bound)</span>
+<span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="nf">calcEdgeWeight</span><span class="p">(</span><span class="n">EdgeIteratorState</span><span class="w"> </span><span class="n">edgeState</span><span class="p">,</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">reverse</span><span class="p">);</span><span class="c1">// :48  (the per-edge cost)</span>
+<span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="nf">calcTurnWeight</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">inEdge</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">viaNode</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">outEdge</span><span class="p">);</span><span class="w">        </span><span class="c1">// :56</span>
+<span class="w">    </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">hasTurnCosts</span><span class="p">();</span><span class="w">                                             </span><span class="c1">// :65</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/weighting/Weighting.java:27</code>. Hold <code>calcEdgeWeight</code> — every
+algorithm in this chapter calls it (indirectly) to ask "what does traversing this edge cost?"</p>
+<h2 id="33-case-study-a-dijkstra">3.3 Case study A — Dijkstra</h2>
+<p>All the algorithms share a base that holds the graph, the weighting, and — note this — an <code>EdgeExplorer</code>:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">abstract</span><span class="w"> </span><span class="kd">class</span> <span class="nc">AbstractRoutingAlgorithm</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">RoutingAlgorithm</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">protected</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">Graph</span><span class="w"> </span><span class="n">graph</span><span class="p">;</span>
+<span class="w">    </span><span class="kd">protected</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">Weighting</span><span class="w"> </span><span class="n">weighting</span><span class="p">;</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="w">    </span><span class="n">edgeExplorer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">graph</span><span class="p">.</span><span class="na">createEdgeExplorer</span><span class="p">();</span><span class="w">     </span><span class="c1">// :56</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/AbstractRoutingAlgorithm.java:33</code>–<code>:57</code>. Dijkstra adds the two
+classic data structures — a priority queue ordered by weight, and a map from node id to its best-known
+entry:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">protected</span><span class="w"> </span><span class="n">IntObjectMap</span><span class="o">&lt;</span><span class="n">SPTEntry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fromMap</span><span class="p">;</span><span class="w">     </span><span class="c1">// :40  node id → best entry so far</span>
+<span class="kd">protected</span><span class="w"> </span><span class="n">PriorityQueue</span><span class="o">&lt;</span><span class="n">SPTEntry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fromHeap</span><span class="p">;</span><span class="w">   </span><span class="c1">// :41  frontier, min-weight first</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/Dijkstra.java:40</code>–<code>:41</code> (allocated in <code>initCollections</code>,
+<code>:52</code>–<code>:55</code>). An <code>SPTEntry</code> is one node in the shortest-path tree — a weight, the edge used to reach it, and
+a parent back-pointer, made heap-orderable by <code>compareTo</code>:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">SPTEntry</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">Comparable</span><span class="o">&lt;</span><span class="n">SPTEntry</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">edge</span><span class="p">;</span><span class="w"> </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">adjNode</span><span class="p">;</span><span class="w"> </span><span class="kd">public</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">weight</span><span class="p">;</span><span class="w"> </span><span class="kd">public</span><span class="w"> </span><span class="n">SPTEntry</span><span class="w"> </span><span class="n">parent</span><span class="p">;</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="nf">compareTo</span><span class="p">(</span><span class="n">SPTEntry</span><span class="w"> </span><span class="n">o</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">weight</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="na">weight</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="p">...</span><span class="w">   </span><span class="c1">// :68</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/SPTEntry.java:28</code>–<code>:44</code>,<code>:67</code>–<code>:74</code>. The heart is the main
+loop — poll the cheapest frontier node, relax its neighbours:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">currEdge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fromHeap</span><span class="p">.</span><span class="na">poll</span><span class="p">();</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">currEdge</span><span class="p">.</span><span class="na">isDeleted</span><span class="p">())</span><span class="w">          </span><span class="c1">// :73  lazy deletion: skip a stale entry</span>
+<span class="w">    </span><span class="k">continue</span><span class="p">;</span>
+<span class="c1">// ...for each neighbour edge `iter`:</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">tmpWeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GHUtility</span><span class="p">.</span><span class="na">calcWeightWithTurnWeight</span><span class="p">(</span><span class="n">weighting</span><span class="p">,</span><span class="w"> </span><span class="n">iter</span><span class="p">,</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="n">currEdge</span><span class="p">.</span><span class="na">edge</span><span class="p">)</span>
+<span class="w">                   </span><span class="o">+</span><span class="w"> </span><span class="n">currEdge</span><span class="p">.</span><span class="na">weight</span><span class="p">;</span><span class="w">                                         </span><span class="c1">// :85</span>
+<span class="c1">// ...</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nEdge</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">               </span><span class="c1">// first time we reach this neighbour</span>
+<span class="w">    </span><span class="n">nEdge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">SPTEntry</span><span class="p">(</span><span class="n">iter</span><span class="p">.</span><span class="na">getEdge</span><span class="p">(),</span><span class="w"> </span><span class="n">iter</span><span class="p">.</span><span class="na">getAdjNode</span><span class="p">(),</span><span class="w"> </span><span class="n">tmpWeight</span><span class="p">,</span><span class="w"> </span><span class="n">currEdge</span><span class="p">);</span><span class="w">  </span><span class="c1">// :93</span>
+<span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nEdge</span><span class="p">.</span><span class="na">weight</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">tmpWeight</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">   </span><span class="c1">// found a cheaper way in</span>
+<span class="w">    </span><span class="n">nEdge</span><span class="p">.</span><span class="na">setDeleted</span><span class="p">();</span><span class="w">            </span><span class="c1">// :97  mark the old entry dead, insert a fresh one</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="p">}</span>
+</code></pre></div></figure>
+
+<p>📌 <code>Dijkstra.java:70</code>–<code>:107</code>; it stops when the polled node is the target (<code>finished()</code> returns
+<code>currEdge.adjNode == to</code>, <code>:109</code>–<code>:111</code>).</p>
+<div class="callout tip"><span class="ic">💡</span>
+<p> <strong>A real-code detail worth catching:</strong> GraphHopper does <strong>not</strong> do a textbook decrease-key. When it
+finds a cheaper path to a node, it marks the old heap entry <code>setDeleted()</code> and inserts a new one; stale
+entries are skipped on poll (<code>:73</code>). Lazy deletion is simpler and, with a binary heap, usually faster —
+a nice example of production code diverging from the textbook for good reasons.</p>
+</div>
+<p>And the choke point everything funnels through — where the pluggable <code>Weighting</code> is actually invoked:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// GHUtility.calcWeightWithTurnWeight(...)</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">weight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">weighting</span><span class="p">.</span><span class="na">calcEdgeWeight</span><span class="p">(</span><span class="n">edgeState</span><span class="p">,</span><span class="w"> </span><span class="n">reverse</span><span class="p">);</span><span class="w">   </span><span class="c1">// :461</span>
+<span class="c1">// ...+ turn cost via weighting.calcTurnWeight(...)</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/util/GHUtility.java:460</code>–<code>:469</code>. <strong>Every</strong> algorithm in this chapter
+relaxes edges through this one call. Swap the <code>Weighting</code> (Chapter 4) and every algorithm's notion of
+"shortest" changes, without touching the search code.</p>
+<h2 id="34-case-study-b-a-and-bidirectional">3.4 Case study B — A* and bidirectional</h2>
+<p>A<em> is Dijkstra plus a </em><em>heuristic</em>*: an optimistic estimate <code>h(n)</code> of the remaining cost to the target,
+added to the real cost so far <code>g(n)</code>. The frontier is ordered by <code>f = g + h</code>, so it leans toward the goal.
+The heuristic is pluggable:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">private</span><span class="w"> </span><span class="n">WeightApproximator</span><span class="w"> </span><span class="n">weightApprox</span><span class="p">;</span><span class="w">   </span><span class="c1">// :48</span>
+<span class="c1">// default: a beeline (straight-line) estimate</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/AStar.java:48</code>,<code>:52</code>–<code>:59</code>. The crux is that an <code>AStarEntry</code>
+carries <strong>two</strong> weights — the heap key <code>g+h</code>, and the <em>real</em> path weight <code>g</code> used when it becomes a parent:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// AStarEntry: weightForHeap (g+h)  vs  weightOfVisitedPath (g)</span>
+<span class="kd">public</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="nf">getWeightOfVisitedPath</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">weightOfVisitedPath</span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w">   </span><span class="c1">// :186</span>
+</code></pre></div></figure>
+
+<p>📌 <code>AStar.java:173</code>–<code>:194</code>. In the loop, <code>g</code> is the real cost, <code>h</code> is the approximation, and their sum is
+what orders the queue:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">double</span><span class="w"> </span><span class="n">tmpWeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GHUtility</span><span class="p">.</span><span class="na">calcWeightWithTurnWeight</span><span class="p">(</span><span class="n">weighting</span><span class="p">,</span><span class="w"> </span><span class="n">iter</span><span class="p">,</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="n">currEdge</span><span class="p">.</span><span class="na">edge</span><span class="p">)</span>
+<span class="w">                   </span><span class="o">+</span><span class="w"> </span><span class="n">currEdge</span><span class="p">.</span><span class="na">weightOfVisitedPath</span><span class="p">;</span><span class="w">                 </span><span class="c1">// :119  g</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">currWeightToGoal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">weightApprox</span><span class="p">.</span><span class="na">approximate</span><span class="p">(</span><span class="n">neighborNode</span><span class="p">);</span><span class="w"> </span><span class="c1">// :128  h</span>
+<span class="kt">double</span><span class="w"> </span><span class="n">estimationFullWeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tmpWeight</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">currWeightToGoal</span><span class="p">;</span><span class="w">       </span><span class="c1">// :131  f = g + h → heap key</span>
+</code></pre></div></figure>
+
+<p>📌 <code>AStar.java:103</code>–<code>:148</code>. For A<em> to stay </em><em>optimal</em><em>, <code>h</code> must never overestimate — it must be an
+</em>admissible* lower bound. The default beeline does this by multiplying straight-line distance by the
+cheapest possible weight-per-metre:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">weight2goal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">minWeightPerDistance</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">dist2goal</span><span class="p">;</span><span class="w">   </span><span class="c1">// :70  (minWeightPerDistance from Weighting :35)</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/weighting/BeelineWeightApproximator.java:66</code>–<code>:72</code>. Since the
+real road can only be longer and slower than the straight line at top speed, this can only <em>under</em>estimate —
+so A* never wrongly discards the true shortest path.</p>
+<p><strong>Bidirectional</strong> search doubles the win. A generic base runs two frontiers and remembers where they meet:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// two everything: bestWeightMapFrom / bestWeightMapTo, pqOpenSetFrom / pqOpenSetTo, bestWeight</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/AbstractBidirAlgo.java:37</code>–<code>:50</code>. Whenever an edge relaxation
+lands on a node the <em>other</em> search has already reached, it updates the best meeting weight <code>μ</code>:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">double</span><span class="w"> </span><span class="n">weight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="na">getWeightOfVisitedPath</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">entryOther</span><span class="p">.</span><span class="na">getWeightOfVisitedPath</span><span class="p">();</span><span class="w">  </span><span class="c1">// :183</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">weight</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">bestWeight</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">bestFwdEntry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">...;</span><span class="w"> </span><span class="n">bestBwdEntry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">...;</span><span class="w"> </span><span class="n">bestWeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">weight</span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w">  </span><span class="c1">// :193</span>
+</code></pre></div></figure>
+
+<p>📌 <code>AbstractBidirAlgo.java:176</code>–<code>:198</code>. And it stops when the two frontier tops can no longer possibly beat
+that best meeting — the classic bidirectional stopping condition:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">return</span><span class="w"> </span><span class="n">currFrom</span><span class="p">.</span><span class="na">weight</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">currTo</span><span class="p">.</span><span class="na">weight</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">bestWeight</span><span class="p">;</span><span class="w">   </span><span class="c1">// :169</span>
+</code></pre></div></figure>
+
+<p>📌 <code>AbstractBidirAlgo.java:165</code>–<code>:170</code>. Non-CH bidirectional Dijkstra/A* fill both frontiers via
+<code>fillEdgesFrom</code>/<code>fillEdgesTo</code>, again routing edge cost through <code>calcWeight</code> → <code>calcEdgeWeight</code>
+(<code>AbstractNonCHBidirAlgo.java:110</code>–<code>:198</code>).</p>
+<div class="callout warn"><span class="ic">⚠️</span>
+<p> <strong>Bidirectional A* is subtle.</strong> Two independent heuristics (one per direction) aren't <em>consistent</em>
+with each other, so the naïve stop condition is wrong. <code>AStarBidirection</code> uses a <strong>balanced</strong>
+approximator and adds a <code>stoppingCriterionOffset</code> to <code>finished()</code>
+(<code>AStarBidirection.java:58</code>–<code>:95</code>, esp. <code>:77</code>–<code>:82</code>). GraphHopper's own class comment notes bidirectional
+A<em> is </em>less* effective than bidirectional Dijkstra — which is exactly why the next step isn't "better
+heuristics" but "preprocess the graph."</p>
+</div>
+<h2 id="35-case-study-c-contraction-hierarchies">3.5 Case study C — Contraction Hierarchies</h2>
+<p>This is the production speedup, and it's a two-phase idea: <strong>preprocess</strong> the graph into a hierarchy of
+"shortcuts," then run a query that only ever climbs the hierarchy.</p>
+<p><strong>Preprocessing — contract nodes, add shortcuts.</strong> Contraction removes nodes one at a time, cheapest
+("least important") first, and whenever removing a node would break a shortest path, it adds a <strong>shortcut</strong>
+edge that preserves it. The contraction order is a priority queue that supports updates:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// nodes with highest priority come last</span>
+<span class="kd">private</span><span class="w"> </span><span class="n">MinHeapWithUpdate</span><span class="w"> </span><span class="n">sortedNodes</span><span class="p">;</span><span class="w">   </span><span class="c1">// :69</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/ch/PrepareContractionHierarchies.java:68</code>–<code>:69</code>. Every node
+gets an initial priority (<code>updatePrioritiesOfRemainingNodes</code>, <code>:201</code>–<code>:211</code>), then the loop repeatedly polls
+the least-important node, re-checking its priority lazily before committing (priorities go stale as
+neighbours contract):</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">sortedNodes</span><span class="p">.</span><span class="na">isEmpty</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">polledNode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sortedNodes</span><span class="p">.</span><span class="na">poll</span><span class="p">();</span><span class="w">                 </span><span class="c1">// :264</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">priority</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">sortedNodes</span><span class="p">.</span><span class="na">peekValue</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">re</span><span class="o">-</span><span class="n">push</span><span class="p">;</span><span class="w"> </span><span class="k">continue</span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w">  </span><span class="c1">// :266  lazy update</span>
+<span class="w">    </span><span class="n">contractNode</span><span class="p">(</span><span class="n">polledNode</span><span class="p">,</span><span class="w"> </span><span class="n">level</span><span class="p">);</span><span class="w">                     </span><span class="c1">// :279</span>
+<span class="w">    </span><span class="c1">// recompute priorities of the contracted node&#39;s neighbours   :288–:295</span>
+</code></pre></div></figure>
+
+<p>📌 <code>PrepareContractionHierarchies.java:213</code>–<code>:313</code>. Contracting a node assigns it a CH <strong>level</strong> and hands
+off to a <code>NodeContractor</code>:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">chBuilder</span><span class="p">.</span><span class="na">setLevel</span><span class="p">(</span><span class="n">node</span><span class="p">,</span><span class="w"> </span><span class="n">level</span><span class="p">);</span><span class="w">       </span><span class="c1">// :347</span>
+<span class="n">nodeContractor</span><span class="p">.</span><span class="na">contractNode</span><span class="p">(</span><span class="n">node</span><span class="p">);</span><span class="w">     </span><span class="c1">// :348</span>
+</code></pre></div></figure>
+
+<p>📌 <code>PrepareContractionHierarchies.java:343</code>–<code>:351</code>. The priority itself is (roughly) <em>edge difference</em> — how
+many shortcuts adding this node would create versus how many edges it removes:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">int</span><span class="w"> </span><span class="n">edgeDifference</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">shortcutsCount</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">prepareGraph</span><span class="p">.</span><span class="na">getDegree</span><span class="p">(</span><span class="n">node</span><span class="p">);</span><span class="w">                 </span><span class="c1">// :108</span>
+<span class="k">return</span><span class="w"> </span><span class="n">params</span><span class="p">.</span><span class="na">edgeDifferenceWeight</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">edgeDifference</span>
+<span class="w">     </span><span class="o">+</span><span class="w"> </span><span class="n">params</span><span class="p">.</span><span class="na">originalEdgesCountWeight</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">originalEdgesCount</span><span class="p">;</span><span class="w">                          </span><span class="c1">// :111</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/ch/NodeBasedNodeContractor.java:90</code>–<code>:115</code>. Before adding a
+shortcut, a <strong>witness search</strong> checks whether a cheaper path already exists that avoids the node — if so, no
+shortcut is needed:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">double</span><span class="w"> </span><span class="n">maxWeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">witnessPathSearcher</span><span class="p">.</span><span class="na">findUpperBound</span><span class="p">(</span><span class="n">toNode</span><span class="p">,</span><span class="w"> </span><span class="n">existingDirectWeight</span><span class="p">,</span><span class="w"> </span><span class="n">maxVisitedNodes</span><span class="p">);</span><span class="w"> </span><span class="c1">// :242</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">maxWeight</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">existingDirectWeight</span><span class="p">)</span><span class="w"> </span><span class="k">continue</span><span class="p">;</span><span class="w">   </span><span class="c1">// :245  witness found → skip the shortcut</span>
+<span class="c1">// else: handler.handleShortcut(...)                :249</span>
+</code></pre></div></figure>
+
+<p>📌 <code>NodeBasedNodeContractor.java:209</code>–<code>:254</code>. A real shortcut records the two edges it bridges, so a query
+can later expand it back into the real path:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">int</span><span class="w"> </span><span class="n">shortcut</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">chBuilder</span><span class="p">.</span><span class="na">addShortcutNodeBased</span><span class="p">(</span><span class="n">sc</span><span class="p">.</span><span class="na">from</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">.</span><span class="na">to</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">.</span><span class="na">flags</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">.</span><span class="na">weight</span><span class="p">,</span>
+<span class="w">                                              </span><span class="n">sc</span><span class="p">.</span><span class="na">skippedEdge1</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">.</span><span class="na">skippedEdge2</span><span class="p">);</span><span class="w">   </span><span class="c1">// :137</span>
+</code></pre></div></figure>
+
+<p>📌 <code>NodeBasedNodeContractor.java:131</code>–<code>:148</code>.</p>
+<p><strong>Query — only climb.</strong> A CH query is bidirectional, but with one rule: only ever traverse toward an
+<strong>equal-or-higher</strong> level. That single filter is what makes it skip the millions of unimportant local nodes:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">return</span><span class="w"> </span><span class="n">graph</span><span class="p">.</span><span class="na">getLevel</span><span class="p">(</span><span class="n">base</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">graph</span><span class="p">.</span><span class="na">getLevel</span><span class="p">(</span><span class="n">adj</span><span class="p">);</span><span class="w">   </span><span class="c1">// :295  upward edges only</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/AbstractBidirCHAlgo.java:278</code>–<code>:297</code> (forward uses the
+out-explorer, backward the in-explorer, <code>:135</code>–<code>:175</code>; both searches must finish, <code>:125</code>–<code>:133</code>). The
+concrete query algorithm adds <strong>stall-on-demand</strong> — abandoning a frontier node if a cheaper route to it
+exists via a higher edge, avoiding wasted expansion:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// entryIsStallable(...): if a neighbour offers a cheaper route to this node, stall it</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/DijkstraBidirectionCH.java:33</code>–<code>:68</code>. The factory picks it
+by default (<code>CHRoutingAlgorithmFactory.java:47</code>–<code>:95</code>, node-based default <code>DijkstraBidirectionCH</code> at
+<code>:84</code>–<code>:89</code>).</p>
+<div class="callout note"><span class="ic">🧠</span>
+<p> <strong>Mental model:</strong> CH trades <strong>preprocessing time and shortcut memory</strong> for <strong>query speed</strong>, and it
+gives up <strong>flexibility</strong> — the weighting is baked in at preprocessing time, so you can't change the cost
+function per request. That trade is why the next case study exists.</p>
+</div>
+<h2 id="36-case-study-d-landmarks-alt">3.6 Case study D — Landmarks / ALT</h2>
+<p>Landmarks (the "ALT" = A<em>, Landmarks, Triangle-inequality) is the middle ground: much faster than plain A</em>,
+but — unlike CH — it still works when the weighting can vary. It's just A<em> with a </em>sharp<em> heuristic built
+from precomputed distances to a handful of </em><em>landmark</em>* nodes.</p>
+<p>Preparation picks landmarks and stores, for each, the distance to and from every node:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">lms</span><span class="p">.</span><span class="na">createLandmarks</span><span class="p">();</span><span class="w">   </span><span class="c1">// :118</span>
+<span class="n">lms</span><span class="p">.</span><span class="na">flush</span><span class="p">();</span><span class="w">             </span><span class="c1">// :119</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/lm/PrepareLandmarks.java:111</code>–<code>:125</code>. Landmarks are chosen by
+a greedy <strong>farthest-point</strong> heuristic (first landmark = the farthest node; each next = farthest from all
+chosen so far), spreading them to the graph's corners:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">landmarkNodeIdsToReturn</span><span class="o">[</span><span class="mi">0</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">explorer</span><span class="p">.</span><span class="na">getLastEntry</span><span class="p">().</span><span class="na">adjNode</span><span class="p">;</span><span class="w">   </span><span class="c1">// :744  first = farthest node</span>
+<span class="c1">// each subsequent landmark = farthest from ALL current landmarks</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/lm/LandmarkStorage.java:734</code>–<code>:760</code>; the from/to weights are
+computed by a Dijkstra from each landmark and stored compactly as 16-bit shorts (<code>:406</code>–<code>:475</code>, read at
+<code>:525</code>–<code>:566</code>).</p>
+<p>The heuristic is the <strong>triangle inequality</strong>. For any landmark <code>L</code>, the true distance <code>d(v,t)</code> is at least
+<code>|d(v,L) − d(t,L)|</code> — a bound you get for free from the stored tables, and a <em>much</em> tighter lower bound than
+a beeline:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">int</span><span class="w"> </span><span class="n">rhs1Int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lms</span><span class="p">.</span><span class="na">getToWeight</span><span class="p">(</span><span class="n">activeLandmarkIndices</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">)</span><span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">weightsFromTToActiveLandmarks</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">;</span><span class="w">   </span><span class="c1">// :170</span>
+<span class="kt">int</span><span class="w"> </span><span class="n">rhs2Int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">weightsFromActiveLandmarksToT</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lms</span><span class="p">.</span><span class="na">getFromWeight</span><span class="p">(</span><span class="n">activeLandmarkIndices</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span><span class="w">   </span><span class="c1">// :171</span>
+<span class="c1">// ...</span>
+<span class="k">return</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">max</span><span class="p">(</span><span class="n">rhs1Int</span><span class="p">,</span><span class="w"> </span><span class="n">rhs2Int</span><span class="p">);</span><span class="w">   </span><span class="c1">// :177  best bound over the two directions</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/lm/LMApproximator.java:139</code>–<code>:178</code>; <code>approximate()</code> takes the
+best active landmark and falls back to the beeline, keeping whichever bound is <em>larger</em> (both are admissible,
+so the larger is tighter):</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">return</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">max</span><span class="p">(</span><span class="n">lmApproximation</span><span class="p">,</span><span class="w"> </span><span class="n">beelineApproximation</span><span class="p">.</span><span class="na">approximate</span><span class="p">(</span><span class="n">v</span><span class="p">));</span><span class="w">   </span><span class="c1">// :126</span>
+</code></pre></div></figure>
+
+<p>📌 <code>LMApproximator.java:94</code>–<code>:137</code>. Because <code>LMApproximator implements WeightApproximator</code> (<code>:34</code>), it plugs
+straight into the <em>same</em> A<em> machinery from §3.4 — Landmarks is literally "A</em> with a better <code>h</code>."</p>
+<h2 id="37-tie-together-who-picks-which">3.7 Tie-together — who picks which</h2>
+<p><code>Router</code> makes the call, based purely on what was prepared at import time:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">chEnabled</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">disableCH</span><span class="p">)</span><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">createCHSolver</span><span class="p">(...);</span><span class="w">    </span><span class="c1">// :193  fastest, fixed weighting</span>
+<span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lmEnabled</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">disableLM</span><span class="p">)</span><span class="w">   </span><span class="k">return</span><span class="w"> </span><span class="n">createLMSolver</span><span class="p">(...);</span><span class="w">    </span><span class="c1">// :195  fast, flexible weighting</span>
+<span class="k">else</span><span class="w">                                </span><span class="k">return</span><span class="w"> </span><span class="n">createFlexSolver</span><span class="p">(...);</span><span class="w">  </span><span class="c1">// :197  plain Dijkstra/A*, fully flexible</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/Router.java:190</code>–<code>:200</code> (<code>chEnabled</code>/<code>lmEnabled</code> = "were CH
+graphs / landmarks built?", <code>:88</code>–<code>:89</code>). The flexible path resolves a string to a concrete algorithm:</p>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">case</span><span class="w"> </span><span class="n">DIJKSTRA_BI</span><span class="p">:</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DijkstraBidirectionRef</span><span class="p">(...);</span><span class="w">   </span><span class="c1">// :44</span>
+<span class="k">case</span><span class="w"> </span><span class="n">ASTAR_BI</span><span class="p">:</span><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">AStarBidirection</span><span class="p">(...);</span><span class="w">         </span><span class="c1">// :49  (the default)</span>
+</code></pre></div></figure>
+
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/RoutingAlgorithmFactorySimple.java:40</code>–<code>:60</code>. So the same
+<code>RoutingAlgorithm</code> interface (<code>calcPath</code>, <code>getVisitedNodes</code>, <code>RoutingAlgorithm.java:28</code>) is satisfied by
+plain Dijkstra, A<em>, a CH query, or an LM-guided A</em> — and the whole difference in speed is <em>how much of the
+graph each visits</em> to return the identical optimal path.</p>
+<h2 id="38-lab-3-dijkstra-vs-a-vs-ch">3.8 Lab 3 — Dijkstra vs A* vs CH</h2>
+<div class="callout lab"><span class="ic">🧪</span>
+<p> <strong>Lab 3.</strong> Read-only. Goal: see, in one number — visited nodes — why the family exists. Record in
+<a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab03-algorithms.md"><code>labs/lab03-algorithms.md</code></a>.</p>
+</div>
+<figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/Documents/learning/graphhopper
+<span class="c1"># confirm the choke point and the CH upward-only rule:</span>
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;460,469p&#39;</span><span class="w"> </span>core/src/main/java/com/graphhopper/util/GHUtility.java
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;295p&#39;</span><span class="w">     </span>core/src/main/java/com/graphhopper/routing/AbstractBidirCHAlgo.java
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;169p&#39;</span><span class="w">     </span>core/src/main/java/com/graphhopper/routing/AbstractBidirAlgo.java
+
+<span class="c1"># every RoutingAlgorithm exposes getVisitedNodes(); compare CH vs flexible on the SAME route.</span>
+<span class="c1"># In config-example.yml, profiles_ch enables CH; add ?ch.disable=true to force the flexible path:</span>
+curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:8989/route?point=52.55,13.35&amp;point=52.47,13.50&amp;profile=car&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">     </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; d=json.load(sys.stdin); print(&#39;CH  took(ms)=&#39;, d[&#39;info&#39;][&#39;took&#39;])&quot;</span>
+curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:8989/route?point=52.55,13.35&amp;point=52.47,13.50&amp;profile=car&amp;ch.disable=true&amp;lm.disable=true&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">     </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; d=json.load(sys.stdin); print(&#39;flex took(ms)=&#39;, d[&#39;info&#39;][&#39;took&#39;])&quot;</span>
+</code></pre></div></figure>
+
+<p><strong>Expected:</strong> <code>GHUtility.java:461</code> reads <code>weighting.calcEdgeWeight(edgeState, reverse)</code>;
+<code>AbstractBidirCHAlgo.java:295</code> is the <code>getLevel(base) &lt;= getLevel(adj)</code> upward filter; the CH request returns
+in a fraction of the flexible request's time — the <strong>same</strong> distance, far less work. (To disable CH the
+server must have <code>ch.disable</code> allowed; otherwise compare against a build with <code>profiles_ch: []</code>.)</p>
+<h2 id="39-checkpoint">3.9 Checkpoint</h2>
+<ol>
+<li>Every algorithm here calls the same method to price an edge. Which method, in which file, and why does
+   that make the <code>Weighting</code> swappable without touching search code?</li>
+<li>GraphHopper's Dijkstra doesn't do a decrease-key. What does it do instead, and where is a stale entry
+   skipped?</li>
+<li>In A*, an <code>AStarEntry</code> holds two weights. What are they, and which one orders the heap vs becomes the
+   parent's path cost? Why must the heuristic under-estimate?</li>
+<li>What does Contraction Hierarchies precompute, what single rule does its <em>query</em> enforce, and what does it
+   give up to get its speed?</li>
+<li>Landmarks is "A* with a better <code>h</code>." Where does that <code>h</code> come from, and why is <code>|d(v,L) − d(t,L)|</code> a
+   valid lower bound?</li>
+<li>Given a request, <code>Router</code> chooses CH, LM, or flexible. What decides, and when would each be right?</li>
+</ol>
+<div class="callout note">
+<p>If #4 is shaky, re-read §3.5. If #3 or #5 is shaky, re-read §3.4 and §3.6 together — they're the same
+A* machinery with different heuristics.</p>
+</div>
+<h2 class="connect" id="connect-to-your-past-eta-dispatch-the-matrix">🔌 Connect to your past (ETA, dispatch &amp; the matrix)</h2>
+<p>This chapter is why GraphHopper is the right engine to study for <em>your</em> work. A ride-hailing backend lives
+and dies on shortest-path queries: the rider's ETA is one <code>route</code>; "which of my 30 nearby drivers is
+closest by road" is a <strong>matrix</strong> of shortest paths (Chapter 7's <code>/matrix</code>/SPT), run on every dispatch. Now
+you know the levers. If those queries need to respect live conditions — a per-request cost that changes with
+traffic or vehicle type — you <em>can't</em> use CH (its weighting is frozen at import); you want <strong>Landmarks</strong>,
+the flexible-but-fast path from §3.6. If the cost function is fixed, CH's ~1000× speedup is free money. And
+for VinBus/BusMap, the same <code>Weighting</code> choke point (§3.3) is where a "buses avoid this street" rule would
+plug in — one method, every algorithm respects it. The family isn't academic; it's the menu you order ETAs
+from.</p>
+<p><strong>Next:</strong> you've seen <em>how</em> the search runs. Now the other half — how you <em>shape</em> what "shortest" means:
+profiles, custom models, and the encoded values the <code>Weighting</code> reads.
+→ <strong><a href="04-profiles-weighting-custom-models.html">Chapter 04 — Profiles, Weighting &amp; Custom Models</a></strong></p>
+    <nav class="pager"><a class="prev" href="02-the-graph-map-to-network.html"><span class="lbl">← Previous</span><span class="ttl">The Graph — turning a map into a routable network</span></a><a class="next" href="04-profiles-weighting-custom-models.html"><span class="lbl">Next →</span><span class="ttl">Profiles, Weighting &amp; Custom Models</span></a></nav>
+  </article></main>
+  <aside class="toc"><nav><h4>On this page</h4>
+<a class="lvl-2" href="#31-why-it-matters">3.1 Why it matters</a>
+<a class="lvl-2" href="#32-mental-model-shrink-the-search-frontier">3.2 Mental model: shrink the search frontier</a>
+<a class="lvl-2" href="#33-case-study-a-dijkstra">3.3 Case study A — Dijkstra</a>
+<a class="lvl-2" href="#34-case-study-b-a-and-bidirectional">3.4 Case study B — A* and bidirectional</a>
+<a class="lvl-2" href="#35-case-study-c-contraction-hierarchies">3.5 Case study C — Contraction Hierarchies</a>
+<a class="lvl-2" href="#36-case-study-d-landmarks-alt">3.6 Case study D — Landmarks / ALT</a>
+<a class="lvl-2" href="#37-tie-together-who-picks-which">3.7 Tie-together — who picks which</a>
+<a class="lvl-2" href="#38-lab-3-dijkstra-vs-a-vs-ch">3.8 Lab 3 — Dijkstra vs A* vs CH</a>
+<a class="lvl-2" href="#39-checkpoint">3.9 Checkpoint</a>
+<a class="lvl-2" href="#connect-to-your-past-eta-dispatch-the-matrix">🔌 Connect to your past (ETA, dispatch &amp; the matrix)</a>
+</nav></aside>
+</div>
+<footer class="site-foot">
+  <a class="foot-brand" href="https://rumitx.com" target="_blank" rel="noopener"><span class="foot-x">X</span> RumitX</a>
+  GraphHopper Internals Handbook · grounded in <a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener">graphhopper/graphhopper</a>
+  @ <code>11.0</code> · maps &amp; route-finding, from the source<br>
+  A <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> publication · maps, routing &amp; human-centric mobility
+</footer>
+<script src="assets/app.js"></script>
+</body>
+</html>
