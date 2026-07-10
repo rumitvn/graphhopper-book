@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="vi" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chapter 03 — The Shortest-Path Algorithm Family ★ · GraphHopper Internals Handbook · RumitX</title>
-<meta name="description" content="A from-the-source handbook on graphhopper/graphhopper: the graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, and the routing web API.">
-<link rel="icon" type="image/svg+xml" href="assets/brand/logo_x.svg">
+<meta name="description" content="Cuốn sách đọc thẳng từ source về graphhopper/graphhopper: graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, và routing web API.">
+<link rel="icon" type="image/svg+xml" href="../assets/brand/logo_x.svg">
 <meta name="author" content="RumitX">
 <meta name="theme-color" content="#0B1E2D">
-<link rel="alternate" hreflang="en" href="03-shortest-path-algorithms.html">
-<link rel="alternate" hreflang="vi" href="vi/03-shortest-path-algorithms.html">
-<link rel="alternate" hreflang="x-default" href="03-shortest-path-algorithms.html">
-<link rel="stylesheet" href="assets/styles.css">
-<link rel="stylesheet" href="assets/code.css">
+<link rel="alternate" hreflang="en" href="../03-shortest-path-algorithms.html">
+<link rel="alternate" hreflang="vi" href="03-shortest-path-algorithms.html">
+<link rel="alternate" hreflang="x-default" href="../03-shortest-path-algorithms.html">
+<link rel="stylesheet" href="../assets/styles.css">
+<link rel="stylesheet" href="../assets/code.css">
 <style>
 .lang-switch{display:inline-flex;align-items:center;gap:.1rem;padding:.15rem;
   border:1px solid var(--border);border-radius:999px;background:var(--surface);
@@ -31,14 +31,14 @@
   <a class="brand" href="index.html"><span class="mark"><span>X</span></span> GraphHopper Internals Handbook</a>
   <span class="spacer"></span>
   <span class="meta-pill">pinned&nbsp;11.0</span>
-  <div class="lang-switch"><span aria-current="true">EN</span><a href="vi/03-shortest-path-algorithms.html" hreflang="vi">VI</a></div>
+  <div class="lang-switch"><a href="../03-shortest-path-algorithms.html" hreflang="en">EN</a><span aria-current="true">VI</span></div>
   <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
 </header>
 <div class="backdrop"></div>
 <div class="shell">
   <aside class="rail"><nav>
-<a class="brand-mini" href="index.html"><img src="assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
-<h4>Chapters</h4>
+<a class="brand-mini" href="index.html"><img src="../assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
+<h4>Chương</h4>
 <a class="" href="00-environment-and-java-refresher.html"><span class="num">00</span><span>Environment &amp; Java Refresher</span></a>
 <a class="" href="01-mental-model-and-the-repo-map.html"><span class="num">01</span><span>Mental Model &amp; the Repo Map</span></a>
 <a class="" href="02-the-graph-map-to-network.html"><span class="num">02</span><span>The Graph — turning a map into a routable network</span></a>
@@ -48,35 +48,36 @@
 <a class="" href="06-map-matching.html"><span class="num">06</span><span>Map-Matching — snapping GPS to roads</span></a>
 <a class="" href="07-navigation-isochrones-web.html"><span class="num">07</span><span>Navigation, Isochrones &amp; the Web/Tiles Surface</span></a>
 <a class="" href="08-capstone-and-staying-current.html"><span class="num">08</span><span>Capstone &amp; Staying Current</span></a>
-<h4>Reference</h4>
+<h4>Tham khảo</h4>
 <a class="" href="glossary.html"><span class="num">§</span><span>Glossary &amp; Index</span></a>
 <a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener"><span class="num">↗</span><span>GitHub repo</span></a>
 </nav></aside>
   <main class="content"><article class="article">
-    <div class="crumbs"><a href="index.html">Handbook</a> / Chapter 03</div>
+    <div class="crumbs"><a href="index.html">Handbook</a> / Chương 03</div>
     <h1 id="chapter-03-the-shortest-path-algorithm-family">Chapter 03 — The Shortest-Path Algorithm Family ★</h1>
 <div class="callout goal">
-<p><strong>Goal:</strong> Understand how GraphHopper finds the fastest route across a continent in about a millisecond.
-We'll do it in <strong>four case studies</strong>: (A) plain <strong>Dijkstra</strong> and the pluggable <code>Weighting</code>; (B) <strong>A*</strong>
-and the <strong>bidirectional</strong> meeting condition; (C) <strong>Contraction Hierarchies</strong> and <em>why</em> it's ~1000×
-faster; and (D) <strong>Landmarks / ALT</strong> for when you can't precompute. By the end you can explain what each
-trades away and point at where every one of them calls <code>Weighting.calcEdgeWeight</code>. Pinned to <strong><code>11.0</code></strong>
-(<code>69e50f6</code>).</p>
+<p><strong>Goal:</strong> Hiểu cách GraphHopper tìm ra route nhanh nhất băng qua cả một lục địa chỉ trong khoảng một
+mili-giây. Ta sẽ làm điều đó qua <strong>bốn case study</strong>: (A) <strong>Dijkstra</strong> thuần và cái <code>Weighting</code>
+cắm-thay-được; (B) <strong>A*</strong> và điều kiện gặp nhau của <strong>bidirectional</strong>; (C) <strong>Contraction Hierarchies</strong>
+và <em>vì sao</em> nó nhanh hơn ~1000×; và (D) <strong>Landmarks / ALT</strong> cho những lúc bạn không thể precompute. Hết
+chương bạn giải thích được mỗi cái đánh đổi gì và chỉ được ra chỗ mà cái nào cũng gọi
+<code>Weighting.calcEdgeWeight</code>. Pinned tới <strong><code>11.0</code></strong> (<code>69e50f6</code>).</p>
 </div>
-<p>This is the flagship chapter, and the longest, because this is where a routing engine earns its name.
-Everything before it <em>builds</em> the graph; everything after it <em>shapes</em> or <em>specializes</em> the search you're
-about to read.</p>
-<h2 id="31-why-it-matters">3.1 Why it matters</h2>
-<p>Dijkstra's algorithm is 65 years old and fits on a napkin. So why is there a whole family here? Because a
-napkin Dijkstra over a graph of tens of millions of nodes takes <em>seconds</em>, and a routing API has a
-<em>millisecond</em> budget. The entire family is a sequence of answers to one question — "how do we get the same
-optimal path, but visit far less of the graph?" — and each answer trades away something (memory,
-preprocessing time, or the freedom to change the cost function) to buy speed.</p>
-<p>For you, this is also the ETA chapter. Every "how long from here to there" a ride-hailing or navigation
-app shows is a shortest-path query underneath. Knowing which algorithm answers it — and what each one
-assumes — is the difference between "the ETA is slow and I don't know why" and "we're on the flexible
-path because our weighting changes per request; here's the fix."</p>
-<h2 id="32-mental-model-shrink-the-search-frontier">3.2 Mental model: shrink the search frontier</h2>
+<p>Đây là chương flagship, và cũng dài nhất, bởi đây là nơi một routing engine thật sự xứng với cái tên của
+nó. Mọi chương trước nó <em>dựng</em> graph; mọi chương sau nó <em>định hình</em> hoặc <em>chuyên biệt hoá</em> cuộc search mà
+bạn sắp đọc.</p>
+<h2 id="31-vi-sao-quan-trong">3.1 Vì sao quan trọng</h2>
+<p>Thuật toán Dijkstra đã 65 tuổi và viết vừa một mảnh giấy ăn. Vậy tại sao lại có nguyên một họ thuật toán ở
+đây? Vì một Dijkstra cỡ mảnh-giấy-ăn chạy trên một graph hàng chục triệu node mất tới <em>hàng giây</em>, trong khi
+một routing API chỉ có ngân sách <em>một mili-giây</em>. Cả họ thuật toán này là một chuỗi câu trả lời cho đúng một
+câu hỏi — "làm sao lấy được cùng một optimal path, nhưng thăm ít phần của graph hơn nhiều?" — và mỗi câu trả
+lời đều đánh đổi một thứ gì đó (memory, thời gian preprocessing, hay quyền tự do thay đổi cost function) để
+mua lấy tốc độ.</p>
+<p>Với bạn, đây cũng là chương ETA. Mỗi con số "từ đây tới đó mất bao lâu" mà một app gọi xe hay dẫn đường hiển
+thị, bên dưới đều là một shortest-path query. Biết thuật toán nào trả lời nó — và mỗi thuật toán giả định
+những gì — chính là ranh giới giữa "ETA chậm mà tôi không biết vì sao" và "chúng ta đang chạy trên flexible
+path vì weighting đổi theo từng request; và đây là cách sửa".</p>
+<h2 id="32-mental-model-thu-hep-search-frontier">3.2 Mental model: thu hẹp search frontier</h2>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">text</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code>  Dijkstra (uninformed)        A* (goal-directed)           CH (hierarchical)
   ┌───────────────────┐        ┌───────────────────┐        ┌───────────────────┐
   │        ....        │        │        ..          │        │   S ─▶▲            │
@@ -90,14 +91,14 @@ path because our weighting changes per request; here's the fix."</p>
                                                                skipping via shortcuts
 </code></pre></div></figure>
 
-<p>Three moves. <strong>A*</strong> adds a <em>heuristic</em> — an optimistic guess of the remaining distance — so the frontier
-stretches toward the target instead of ballooning in all directions. <strong>Bidirectional</strong> search runs two
-frontiers, one from each end, and stops when they meet — each explores half the radius. <strong>Contraction
-Hierarchies</strong> goes further: it <em>preprocesses</em> the graph into levels and adds "shortcut" edges, so a query
-only ever climbs to more-important roads and meets in the middle, skipping thousands of local nodes.
-<strong>Landmarks/ALT</strong> is A<em> with a </em>much* better heuristic derived from precomputed distances to a few anchor
-nodes — the fallback when CH's fixed weighting won't do.</p>
-<p>Everything below funnels edge costs through <strong>one</strong> interface. Meet it first:</p>
+<p>Ba nước đi. <strong>A*</strong> thêm một <em>heuristic</em> — một phỏng đoán lạc quan về quãng đường còn lại — để frontier vươn
+về phía target thay vì phình ra mọi hướng. <strong>Bidirectional</strong> search chạy hai frontier, mỗi cái xuất phát từ
+một đầu, và dừng khi chúng gặp nhau — mỗi bên chỉ khám phá nửa bán kính. <strong>Contraction Hierarchies</strong> đi xa
+hơn: nó <em>preprocess</em> graph thành các level rồi thêm các edge "shortcut", nên một query chỉ leo lên những con
+đường quan trọng hơn rồi gặp nhau ở giữa, bỏ qua hàng nghìn node cục bộ. <strong>Landmarks/ALT</strong> là A<em> với một
+heuristic tốt hơn </em>rất nhiều*, dựng từ các khoảng cách tính sẵn tới một vài node mỏ neo — là phương án dự
+phòng khi weighting cố định của CH không dùng được.</p>
+<p>Mọi thứ bên dưới đều dồn edge cost qua <strong>một</strong> interface duy nhất. Làm quen với nó trước đã:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">interface</span> <span class="nc">Weighting</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="nf">calcMinWeightPerDistance</span><span class="p">();</span><span class="w">                                  </span><span class="c1">// :35  (heuristic lower bound)</span>
 <span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="nf">calcEdgeWeight</span><span class="p">(</span><span class="n">EdgeIteratorState</span><span class="w"> </span><span class="n">edgeState</span><span class="p">,</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">reverse</span><span class="p">);</span><span class="c1">// :48  (the per-edge cost)</span>
@@ -105,10 +106,10 @@ nodes — the fallback when CH's fixed weighting won't do.</p>
 <span class="w">    </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">hasTurnCosts</span><span class="p">();</span><span class="w">                                             </span><span class="c1">// :65</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/weighting/Weighting.java:27</code>. Hold <code>calcEdgeWeight</code> — every
-algorithm in this chapter calls it (indirectly) to ask "what does traversing this edge cost?"</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/weighting/Weighting.java:27</code>. Nhớ lấy <code>calcEdgeWeight</code> — mọi
+thuật toán trong chương này đều gọi nó (gián tiếp) để hỏi "đi qua edge này tốn bao nhiêu?"</p>
 <h2 id="33-case-study-a-dijkstra">3.3 Case study A — Dijkstra</h2>
-<p>All the algorithms share a base that holds the graph, the weighting, and — note this — an <code>EdgeExplorer</code>:</p>
+<p>Tất cả các thuật toán dùng chung một lớp base giữ graph, weighting, và — để ý chỗ này — một <code>EdgeExplorer</code>:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">abstract</span><span class="w"> </span><span class="kd">class</span> <span class="nc">AbstractRoutingAlgorithm</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">RoutingAlgorithm</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="kd">protected</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">Graph</span><span class="w"> </span><span class="n">graph</span><span class="p">;</span>
 <span class="w">    </span><span class="kd">protected</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">Weighting</span><span class="w"> </span><span class="n">weighting</span><span class="p">;</span>
@@ -116,24 +117,24 @@ algorithm in this chapter calls it (indirectly) to ask "what does traversing thi
 <span class="w">    </span><span class="n">edgeExplorer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">graph</span><span class="p">.</span><span class="na">createEdgeExplorer</span><span class="p">();</span><span class="w">     </span><span class="c1">// :56</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/AbstractRoutingAlgorithm.java:33</code>–<code>:57</code>. Dijkstra adds the two
-classic data structures — a priority queue ordered by weight, and a map from node id to its best-known
-entry:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/AbstractRoutingAlgorithm.java:33</code>–<code>:57</code>. Dijkstra thêm hai cấu
+trúc dữ liệu kinh điển — một priority queue sắp theo weight, và một map từ node id tới entry tốt nhất đã biết
+của nó:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">protected</span><span class="w"> </span><span class="n">IntObjectMap</span><span class="o">&lt;</span><span class="n">SPTEntry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fromMap</span><span class="p">;</span><span class="w">     </span><span class="c1">// :40  node id → best entry so far</span>
 <span class="kd">protected</span><span class="w"> </span><span class="n">PriorityQueue</span><span class="o">&lt;</span><span class="n">SPTEntry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">fromHeap</span><span class="p">;</span><span class="w">   </span><span class="c1">// :41  frontier, min-weight first</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/Dijkstra.java:40</code>–<code>:41</code> (allocated in <code>initCollections</code>,
-<code>:52</code>–<code>:55</code>). An <code>SPTEntry</code> is one node in the shortest-path tree — a weight, the edge used to reach it, and
-a parent back-pointer, made heap-orderable by <code>compareTo</code>:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/Dijkstra.java:40</code>–<code>:41</code> (được cấp phát trong <code>initCollections</code>,
+<code>:52</code>–<code>:55</code>). Một <code>SPTEntry</code> là một node trong shortest-path tree — một weight, edge đã dùng để tới nó, và một
+con trỏ back-pointer về parent, được làm cho heap sắp xếp được nhờ <code>compareTo</code>:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">SPTEntry</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">Comparable</span><span class="o">&lt;</span><span class="n">SPTEntry</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">edge</span><span class="p">;</span><span class="w"> </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">adjNode</span><span class="p">;</span><span class="w"> </span><span class="kd">public</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">weight</span><span class="p">;</span><span class="w"> </span><span class="kd">public</span><span class="w"> </span><span class="n">SPTEntry</span><span class="w"> </span><span class="n">parent</span><span class="p">;</span>
 <span class="w">    </span><span class="c1">// ...</span>
 <span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="nf">compareTo</span><span class="p">(</span><span class="n">SPTEntry</span><span class="w"> </span><span class="n">o</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">weight</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="na">weight</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="p">...</span><span class="w">   </span><span class="c1">// :68</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/SPTEntry.java:28</code>–<code>:44</code>,<code>:67</code>–<code>:74</code>. The heart is the main
-loop — poll the cheapest frontier node, relax its neighbours:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/SPTEntry.java:28</code>–<code>:44</code>,<code>:67</code>–<code>:74</code>. Trái tim là vòng lặp
+chính — poll node rẻ nhất trên frontier, relax các neighbour của nó:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">currEdge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fromHeap</span><span class="p">.</span><span class="na">poll</span><span class="p">();</span>
 <span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">currEdge</span><span class="p">.</span><span class="na">isDeleted</span><span class="p">())</span><span class="w">          </span><span class="c1">// :73  lazy deletion: skip a stale entry</span>
 <span class="w">    </span><span class="k">continue</span><span class="p">;</span>
@@ -149,94 +150,95 @@ loop — poll the cheapest frontier node, relax its neighbours:</p>
 <span class="p">}</span>
 </code></pre></div></figure>
 
-<p>📌 <code>Dijkstra.java:70</code>–<code>:107</code>; it stops when the polled node is the target (<code>finished()</code> returns
+<p>📌 <code>Dijkstra.java:70</code>–<code>:107</code>; nó dừng khi node vừa poll ra chính là target (<code>finished()</code> trả về
 <code>currEdge.adjNode == to</code>, <code>:109</code>–<code>:111</code>).</p>
 <div class="callout tip"><span class="ic">💡</span>
-<p> <strong>A real-code detail worth catching:</strong> GraphHopper does <strong>not</strong> do a textbook decrease-key. When it
-finds a cheaper path to a node, it marks the old heap entry <code>setDeleted()</code> and inserts a new one; stale
-entries are skipped on poll (<code>:73</code>). Lazy deletion is simpler and, with a binary heap, usually faster —
-a nice example of production code diverging from the textbook for good reasons.</p>
+<p> <strong>Một chi tiết đáng nhặt trong code thật:</strong> GraphHopper <strong>không</strong> làm một decrease-key kiểu sách giáo
+khoa. Khi tìm được một đường rẻ hơn tới một node, nó đánh dấu heap entry cũ là <code>setDeleted()</code> rồi chèn một
+cái mới; các entry cũ kỹ (stale) sẽ bị bỏ qua lúc poll (<code>:73</code>). Lazy deletion đơn giản hơn và, với một
+binary heap, thường nhanh hơn — một ví dụ đẹp về chuyện code production đi chệch sách giáo khoa vì lý do
+chính đáng.</p>
 </div>
-<p>And the choke point everything funnels through — where the pluggable <code>Weighting</code> is actually invoked:</p>
+<p>Và điểm nghẽn mà mọi thứ dồn qua — nơi cái <code>Weighting</code> cắm-thay-được thật sự được gọi:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// GHUtility.calcWeightWithTurnWeight(...)</span>
 <span class="kt">double</span><span class="w"> </span><span class="n">weight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">weighting</span><span class="p">.</span><span class="na">calcEdgeWeight</span><span class="p">(</span><span class="n">edgeState</span><span class="p">,</span><span class="w"> </span><span class="n">reverse</span><span class="p">);</span><span class="w">   </span><span class="c1">// :461</span>
 <span class="c1">// ...+ turn cost via weighting.calcTurnWeight(...)</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/util/GHUtility.java:460</code>–<code>:469</code>. <strong>Every</strong> algorithm in this chapter
-relaxes edges through this one call. Swap the <code>Weighting</code> (Chapter 4) and every algorithm's notion of
-"shortest" changes, without touching the search code.</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/util/GHUtility.java:460</code>–<code>:469</code>. <strong>Mọi</strong> thuật toán trong chương này
+đều relax edge qua đúng một lời gọi này. Đổi <code>Weighting</code> (Chương 4) là khái niệm "ngắn nhất" của mọi thuật
+toán đổi theo, mà không cần đụng vào code search.</p>
 <h2 id="34-case-study-b-a-and-bidirectional">3.4 Case study B — A* and bidirectional</h2>
-<p>A<em> is Dijkstra plus a </em><em>heuristic</em>*: an optimistic estimate <code>h(n)</code> of the remaining cost to the target,
-added to the real cost so far <code>g(n)</code>. The frontier is ordered by <code>f = g + h</code>, so it leans toward the goal.
-The heuristic is pluggable:</p>
+<p>A<em> là Dijkstra cộng thêm một </em><em>heuristic</em>*: một ước lượng lạc quan <code>h(n)</code> cho chi phí còn lại tới target,
+cộng với chi phí thực đã đi <code>g(n)</code>. Frontier được sắp theo <code>f = g + h</code>, nên nó nghiêng về phía goal.
+Heuristic này cắm-thay-được:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">private</span><span class="w"> </span><span class="n">WeightApproximator</span><span class="w"> </span><span class="n">weightApprox</span><span class="p">;</span><span class="w">   </span><span class="c1">// :48</span>
 <span class="c1">// default: a beeline (straight-line) estimate</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/AStar.java:48</code>,<code>:52</code>–<code>:59</code>. The crux is that an <code>AStarEntry</code>
-carries <strong>two</strong> weights — the heap key <code>g+h</code>, and the <em>real</em> path weight <code>g</code> used when it becomes a parent:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/AStar.java:48</code>,<code>:52</code>–<code>:59</code>. Điểm mấu chốt: một <code>AStarEntry</code>
+mang <strong>hai</strong> weight — heap key <code>g+h</code>, và weight <em>thực</em> của path <code>g</code> dùng khi nó trở thành parent:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// AStarEntry: weightForHeap (g+h)  vs  weightOfVisitedPath (g)</span>
 <span class="kd">public</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="nf">getWeightOfVisitedPath</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">weightOfVisitedPath</span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w">   </span><span class="c1">// :186</span>
 </code></pre></div></figure>
 
-<p>📌 <code>AStar.java:173</code>–<code>:194</code>. In the loop, <code>g</code> is the real cost, <code>h</code> is the approximation, and their sum is
-what orders the queue:</p>
+<p>📌 <code>AStar.java:173</code>–<code>:194</code>. Trong vòng lặp, <code>g</code> là chi phí thực, <code>h</code> là phần approximation, và tổng của chúng
+là thứ sắp thứ tự cho queue:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">double</span><span class="w"> </span><span class="n">tmpWeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GHUtility</span><span class="p">.</span><span class="na">calcWeightWithTurnWeight</span><span class="p">(</span><span class="n">weighting</span><span class="p">,</span><span class="w"> </span><span class="n">iter</span><span class="p">,</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="n">currEdge</span><span class="p">.</span><span class="na">edge</span><span class="p">)</span>
 <span class="w">                   </span><span class="o">+</span><span class="w"> </span><span class="n">currEdge</span><span class="p">.</span><span class="na">weightOfVisitedPath</span><span class="p">;</span><span class="w">                 </span><span class="c1">// :119  g</span>
 <span class="kt">double</span><span class="w"> </span><span class="n">currWeightToGoal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">weightApprox</span><span class="p">.</span><span class="na">approximate</span><span class="p">(</span><span class="n">neighborNode</span><span class="p">);</span><span class="w"> </span><span class="c1">// :128  h</span>
 <span class="kt">double</span><span class="w"> </span><span class="n">estimationFullWeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tmpWeight</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">currWeightToGoal</span><span class="p">;</span><span class="w">       </span><span class="c1">// :131  f = g + h → heap key</span>
 </code></pre></div></figure>
 
-<p>📌 <code>AStar.java:103</code>–<code>:148</code>. For A<em> to stay </em><em>optimal</em><em>, <code>h</code> must never overestimate — it must be an
-</em>admissible* lower bound. The default beeline does this by multiplying straight-line distance by the
-cheapest possible weight-per-metre:</p>
+<p>📌 <code>AStar.java:103</code>–<code>:148</code>. Để A<em> còn </em><em>optimal</em><em>, <code>h</code> không bao giờ được ước lượng vượt (overestimate) — nó
+phải là một lower bound </em>admissible*. Beeline mặc định làm điều đó bằng cách nhân khoảng cách đường thẳng với
+weight-trên-mét rẻ nhất có thể:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">weight2goal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">minWeightPerDistance</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">dist2goal</span><span class="p">;</span><span class="w">   </span><span class="c1">// :70  (minWeightPerDistance from Weighting :35)</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/weighting/BeelineWeightApproximator.java:66</code>–<code>:72</code>. Since the
-real road can only be longer and slower than the straight line at top speed, this can only <em>under</em>estimate —
-so A* never wrongly discards the true shortest path.</p>
-<p><strong>Bidirectional</strong> search doubles the win. A generic base runs two frontiers and remembers where they meet:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/weighting/BeelineWeightApproximator.java:66</code>–<code>:72</code>. Vì con
+đường thật chỉ có thể dài hơn và chậm hơn so với đường thẳng đi ở tốc độ tối đa, nên giá trị này chỉ có thể
+<em>thấp hơn</em> thực tế (underestimate) — nhờ vậy A* không bao giờ vứt nhầm cái true shortest path.</p>
+<p><strong>Bidirectional</strong> search nhân đôi phần lợi. Một lớp base tổng quát chạy hai frontier và ghi nhớ chỗ chúng gặp
+nhau:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// two everything: bestWeightMapFrom / bestWeightMapTo, pqOpenSetFrom / pqOpenSetTo, bestWeight</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/AbstractBidirAlgo.java:37</code>–<code>:50</code>. Whenever an edge relaxation
-lands on a node the <em>other</em> search has already reached, it updates the best meeting weight <code>μ</code>:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/AbstractBidirAlgo.java:37</code>–<code>:50</code>. Mỗi khi một lần relax edge
+rơi vào một node mà search <em>phía kia</em> đã chạm tới, nó cập nhật best meeting weight <code>μ</code>:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">double</span><span class="w"> </span><span class="n">weight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="na">getWeightOfVisitedPath</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">entryOther</span><span class="p">.</span><span class="na">getWeightOfVisitedPath</span><span class="p">();</span><span class="w">  </span><span class="c1">// :183</span>
 <span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">weight</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">bestWeight</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">bestFwdEntry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">...;</span><span class="w"> </span><span class="n">bestBwdEntry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">...;</span><span class="w"> </span><span class="n">bestWeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">weight</span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w">  </span><span class="c1">// :193</span>
 </code></pre></div></figure>
 
-<p>📌 <code>AbstractBidirAlgo.java:176</code>–<code>:198</code>. And it stops when the two frontier tops can no longer possibly beat
-that best meeting — the classic bidirectional stopping condition:</p>
+<p>📌 <code>AbstractBidirAlgo.java:176</code>–<code>:198</code>. Và nó dừng khi hai đỉnh frontier không còn cơ hội nào thắng được cái
+best meeting đó nữa — đúng cái điều kiện dừng bidirectional kinh điển:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">return</span><span class="w"> </span><span class="n">currFrom</span><span class="p">.</span><span class="na">weight</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">currTo</span><span class="p">.</span><span class="na">weight</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">bestWeight</span><span class="p">;</span><span class="w">   </span><span class="c1">// :169</span>
 </code></pre></div></figure>
 
-<p>📌 <code>AbstractBidirAlgo.java:165</code>–<code>:170</code>. Non-CH bidirectional Dijkstra/A* fill both frontiers via
-<code>fillEdgesFrom</code>/<code>fillEdgesTo</code>, again routing edge cost through <code>calcWeight</code> → <code>calcEdgeWeight</code>
+<p>📌 <code>AbstractBidirAlgo.java:165</code>–<code>:170</code>. Bidirectional Dijkstra/A* không-CH đổ đầy cả hai frontier qua
+<code>fillEdgesFrom</code>/<code>fillEdgesTo</code>, lại một lần nữa dẫn edge cost qua <code>calcWeight</code> → <code>calcEdgeWeight</code>
 (<code>AbstractNonCHBidirAlgo.java:110</code>–<code>:198</code>).</p>
 <div class="callout warn"><span class="ic">⚠️</span>
-<p> <strong>Bidirectional A* is subtle.</strong> Two independent heuristics (one per direction) aren't <em>consistent</em>
-with each other, so the naïve stop condition is wrong. <code>AStarBidirection</code> uses a <strong>balanced</strong>
-approximator and adds a <code>stoppingCriterionOffset</code> to <code>finished()</code>
-(<code>AStarBidirection.java:58</code>–<code>:95</code>, esp. <code>:77</code>–<code>:82</code>). GraphHopper's own class comment notes bidirectional
-A<em> is </em>less* effective than bidirectional Dijkstra — which is exactly why the next step isn't "better
-heuristics" but "preprocess the graph."</p>
+<p> <strong>Bidirectional A* rất tinh vi.</strong> Hai heuristic độc lập (mỗi hướng một cái) không <em>consistent</em> với
+nhau, nên điều kiện dừng ngây thơ là sai. <code>AStarBidirection</code> dùng một approximator <strong>balanced</strong> và thêm một
+<code>stoppingCriterionOffset</code> vào <code>finished()</code> (<code>AStarBidirection.java:58</code>–<code>:95</code>, đặc biệt <code>:77</code>–<code>:82</code>). Chính
+comment ở class của GraphHopper cũng ghi rằng bidirectional A<em> </em>kém* hiệu quả hơn bidirectional Dijkstra —
+và đó đúng là lý do vì sao bước tiếp theo không phải là "heuristic tốt hơn" mà là "preprocess cái graph".</p>
 </div>
 <h2 id="35-case-study-c-contraction-hierarchies">3.5 Case study C — Contraction Hierarchies</h2>
-<p>This is the production speedup, and it's a two-phase idea: <strong>preprocess</strong> the graph into a hierarchy of
-"shortcuts," then run a query that only ever climbs the hierarchy.</p>
-<p><strong>Preprocessing — contract nodes, add shortcuts.</strong> Contraction removes nodes one at a time, cheapest
-("least important") first, and whenever removing a node would break a shortest path, it adds a <strong>shortcut</strong>
-edge that preserves it. The contraction order is a priority queue that supports updates:</p>
+<p>Đây là cú tăng tốc dùng trong production, và nó là một ý tưởng hai pha: <strong>preprocess</strong> graph thành một hệ
+phân cấp các "shortcut," rồi chạy một query chỉ leo lên trong hệ phân cấp đó.</p>
+<p><strong>Preprocessing — contract node, thêm shortcut.</strong> Contraction gỡ node từng cái một, rẻ nhất ("ít quan trọng
+nhất") trước, và mỗi khi việc gỡ một node làm đứt một shortest path, nó thêm một edge <strong>shortcut</strong> để giữ
+path đó lại. Thứ tự contraction là một priority queue có hỗ trợ cập nhật:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// nodes with highest priority come last</span>
 <span class="kd">private</span><span class="w"> </span><span class="n">MinHeapWithUpdate</span><span class="w"> </span><span class="n">sortedNodes</span><span class="p">;</span><span class="w">   </span><span class="c1">// :69</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/ch/PrepareContractionHierarchies.java:68</code>–<code>:69</code>. Every node
-gets an initial priority (<code>updatePrioritiesOfRemainingNodes</code>, <code>:201</code>–<code>:211</code>), then the loop repeatedly polls
-the least-important node, re-checking its priority lazily before committing (priorities go stale as
-neighbours contract):</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/ch/PrepareContractionHierarchies.java:68</code>–<code>:69</code>. Mỗi node nhận
+một priority khởi tạo (<code>updatePrioritiesOfRemainingNodes</code>, <code>:201</code>–<code>:211</code>), rồi vòng lặp liên tục poll node
+ít-quan-trọng-nhất, kiểm tra lại priority của nó một cách lazy trước khi chốt (priority trở nên cũ kỹ khi các
+neighbour bị contract dần):</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">sortedNodes</span><span class="p">.</span><span class="na">isEmpty</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">polledNode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sortedNodes</span><span class="p">.</span><span class="na">poll</span><span class="p">();</span><span class="w">                 </span><span class="c1">// :264</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">priority</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">sortedNodes</span><span class="p">.</span><span class="na">peekValue</span><span class="p">())</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">re</span><span class="o">-</span><span class="n">push</span><span class="p">;</span><span class="w"> </span><span class="k">continue</span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w">  </span><span class="c1">// :266  lazy update</span>
@@ -244,111 +246,111 @@ neighbours contract):</p>
 <span class="w">    </span><span class="c1">// recompute priorities of the contracted node&#39;s neighbours   :288–:295</span>
 </code></pre></div></figure>
 
-<p>📌 <code>PrepareContractionHierarchies.java:213</code>–<code>:313</code>. Contracting a node assigns it a CH <strong>level</strong> and hands
-off to a <code>NodeContractor</code>:</p>
+<p>📌 <code>PrepareContractionHierarchies.java:213</code>–<code>:313</code>. Contract một node sẽ gán cho nó một CH <strong>level</strong> rồi
+chuyển tiếp cho một <code>NodeContractor</code>:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">chBuilder</span><span class="p">.</span><span class="na">setLevel</span><span class="p">(</span><span class="n">node</span><span class="p">,</span><span class="w"> </span><span class="n">level</span><span class="p">);</span><span class="w">       </span><span class="c1">// :347</span>
 <span class="n">nodeContractor</span><span class="p">.</span><span class="na">contractNode</span><span class="p">(</span><span class="n">node</span><span class="p">);</span><span class="w">     </span><span class="c1">// :348</span>
 </code></pre></div></figure>
 
-<p>📌 <code>PrepareContractionHierarchies.java:343</code>–<code>:351</code>. The priority itself is (roughly) <em>edge difference</em> — how
-many shortcuts adding this node would create versus how many edges it removes:</p>
+<p>📌 <code>PrepareContractionHierarchies.java:343</code>–<code>:351</code>. Bản thân priority (đại khái) chính là <em>edge difference</em> —
+thêm node này vào sẽ tạo ra bao nhiêu shortcut so với việc nó gỡ đi bao nhiêu edge:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">int</span><span class="w"> </span><span class="n">edgeDifference</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">shortcutsCount</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">prepareGraph</span><span class="p">.</span><span class="na">getDegree</span><span class="p">(</span><span class="n">node</span><span class="p">);</span><span class="w">                 </span><span class="c1">// :108</span>
 <span class="k">return</span><span class="w"> </span><span class="n">params</span><span class="p">.</span><span class="na">edgeDifferenceWeight</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">edgeDifference</span>
 <span class="w">     </span><span class="o">+</span><span class="w"> </span><span class="n">params</span><span class="p">.</span><span class="na">originalEdgesCountWeight</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">originalEdgesCount</span><span class="p">;</span><span class="w">                          </span><span class="c1">// :111</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/ch/NodeBasedNodeContractor.java:90</code>–<code>:115</code>. Before adding a
-shortcut, a <strong>witness search</strong> checks whether a cheaper path already exists that avoids the node — if so, no
-shortcut is needed:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/ch/NodeBasedNodeContractor.java:90</code>–<code>:115</code>. Trước khi thêm một
+shortcut, một <strong>witness search</strong> kiểm tra xem đã có sẵn một đường rẻ hơn né được node đó chưa — nếu có thì
+khỏi cần shortcut:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">double</span><span class="w"> </span><span class="n">maxWeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">witnessPathSearcher</span><span class="p">.</span><span class="na">findUpperBound</span><span class="p">(</span><span class="n">toNode</span><span class="p">,</span><span class="w"> </span><span class="n">existingDirectWeight</span><span class="p">,</span><span class="w"> </span><span class="n">maxVisitedNodes</span><span class="p">);</span><span class="w"> </span><span class="c1">// :242</span>
 <span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">maxWeight</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">existingDirectWeight</span><span class="p">)</span><span class="w"> </span><span class="k">continue</span><span class="p">;</span><span class="w">   </span><span class="c1">// :245  witness found → skip the shortcut</span>
 <span class="c1">// else: handler.handleShortcut(...)                :249</span>
 </code></pre></div></figure>
 
-<p>📌 <code>NodeBasedNodeContractor.java:209</code>–<code>:254</code>. A real shortcut records the two edges it bridges, so a query
-can later expand it back into the real path:</p>
+<p>📌 <code>NodeBasedNodeContractor.java:209</code>–<code>:254</code>. Một shortcut thật sẽ ghi lại hai edge mà nó bắc cầu, để về sau
+một query có thể bung nó trở lại thành đường đi thật:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">int</span><span class="w"> </span><span class="n">shortcut</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">chBuilder</span><span class="p">.</span><span class="na">addShortcutNodeBased</span><span class="p">(</span><span class="n">sc</span><span class="p">.</span><span class="na">from</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">.</span><span class="na">to</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">.</span><span class="na">flags</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">.</span><span class="na">weight</span><span class="p">,</span>
 <span class="w">                                              </span><span class="n">sc</span><span class="p">.</span><span class="na">skippedEdge1</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">.</span><span class="na">skippedEdge2</span><span class="p">);</span><span class="w">   </span><span class="c1">// :137</span>
 </code></pre></div></figure>
 
 <p>📌 <code>NodeBasedNodeContractor.java:131</code>–<code>:148</code>.</p>
-<p><strong>Query — only climb.</strong> A CH query is bidirectional, but with one rule: only ever traverse toward an
-<strong>equal-or-higher</strong> level. That single filter is what makes it skip the millions of unimportant local nodes:</p>
+<p><strong>Query — chỉ leo lên.</strong> Một CH query là bidirectional, nhưng có đúng một luật: chỉ đi về phía level
+<strong>bằng-hoặc-cao-hơn</strong>. Đúng một bộ lọc đó là thứ khiến nó bỏ qua hàng triệu node cục bộ không quan trọng:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">return</span><span class="w"> </span><span class="n">graph</span><span class="p">.</span><span class="na">getLevel</span><span class="p">(</span><span class="n">base</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">graph</span><span class="p">.</span><span class="na">getLevel</span><span class="p">(</span><span class="n">adj</span><span class="p">);</span><span class="w">   </span><span class="c1">// :295  upward edges only</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/AbstractBidirCHAlgo.java:278</code>–<code>:297</code> (forward uses the
-out-explorer, backward the in-explorer, <code>:135</code>–<code>:175</code>; both searches must finish, <code>:125</code>–<code>:133</code>). The
-concrete query algorithm adds <strong>stall-on-demand</strong> — abandoning a frontier node if a cheaper route to it
-exists via a higher edge, avoiding wasted expansion:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/AbstractBidirCHAlgo.java:278</code>–<code>:297</code> (chiều forward dùng
+out-explorer, chiều backward dùng in-explorer, <code>:135</code>–<code>:175</code>; cả hai search đều phải kết thúc,
+<code>:125</code>–<code>:133</code>). Thuật toán query cụ thể thêm <strong>stall-on-demand</strong> — bỏ một node trên frontier nếu đã có một
+đường rẻ hơn tới nó qua một edge cao hơn, tránh mở rộng phí công:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// entryIsStallable(...): if a neighbour offers a cheaper route to this node, stall it</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/DijkstraBidirectionCH.java:33</code>–<code>:68</code>. The factory picks it
-by default (<code>CHRoutingAlgorithmFactory.java:47</code>–<code>:95</code>, node-based default <code>DijkstraBidirectionCH</code> at
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/DijkstraBidirectionCH.java:33</code>–<code>:68</code>. Factory chọn nó làm mặc
+định (<code>CHRoutingAlgorithmFactory.java:47</code>–<code>:95</code>, mặc định node-based là <code>DijkstraBidirectionCH</code> tại
 <code>:84</code>–<code>:89</code>).</p>
 <div class="callout note"><span class="ic">🧠</span>
-<p> <strong>Mental model:</strong> CH trades <strong>preprocessing time and shortcut memory</strong> for <strong>query speed</strong>, and it
-gives up <strong>flexibility</strong> — the weighting is baked in at preprocessing time, so you can't change the cost
-function per request. That trade is why the next case study exists.</p>
+<p> <strong>Mental model:</strong> CH đánh đổi <strong>thời gian preprocessing và bộ nhớ cho shortcut</strong> để lấy <strong>tốc độ
+query</strong>, và nó hy sinh <strong>tính linh hoạt</strong> — weighting bị nướng cứng vào lúc preprocessing, nên bạn không
+thể đổi cost function theo từng request. Chính cú đánh đổi đó là lý do case study tiếp theo tồn tại.</p>
 </div>
 <h2 id="36-case-study-d-landmarks-alt">3.6 Case study D — Landmarks / ALT</h2>
-<p>Landmarks (the "ALT" = A<em>, Landmarks, Triangle-inequality) is the middle ground: much faster than plain A</em>,
-but — unlike CH — it still works when the weighting can vary. It's just A<em> with a </em>sharp<em> heuristic built
-from precomputed distances to a handful of </em><em>landmark</em>* nodes.</p>
-<p>Preparation picks landmarks and stores, for each, the distance to and from every node:</p>
+<p>Landmarks (chữ "ALT" = A<em>, Landmarks, Triangle-inequality) là điểm trung dung: nhanh hơn A</em> thuần rất nhiều,
+nhưng — khác với CH — nó vẫn chạy được khi weighting có thể thay đổi. Nó chỉ đơn giản là A<em> với một heuristic
+</em>sắc bén<em>, dựng từ các khoảng cách tính sẵn tới một nhúm node </em><em>landmark</em>*.</p>
+<p>Bước chuẩn bị chọn ra các landmark rồi lưu, cho mỗi landmark, khoảng cách đi tới và đi từ mọi node:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">lms</span><span class="p">.</span><span class="na">createLandmarks</span><span class="p">();</span><span class="w">   </span><span class="c1">// :118</span>
 <span class="n">lms</span><span class="p">.</span><span class="na">flush</span><span class="p">();</span><span class="w">             </span><span class="c1">// :119</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/lm/PrepareLandmarks.java:111</code>–<code>:125</code>. Landmarks are chosen by
-a greedy <strong>farthest-point</strong> heuristic (first landmark = the farthest node; each next = farthest from all
-chosen so far), spreading them to the graph's corners:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/lm/PrepareLandmarks.java:111</code>–<code>:125</code>. Các landmark được chọn
+bằng một heuristic <strong>farthest-point</strong> kiểu greedy (landmark đầu tiên = node xa nhất; mỗi landmark kế = xa nhất
+so với tất cả những cái đã chọn), rải chúng ra các góc của graph:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">landmarkNodeIdsToReturn</span><span class="o">[</span><span class="mi">0</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">explorer</span><span class="p">.</span><span class="na">getLastEntry</span><span class="p">().</span><span class="na">adjNode</span><span class="p">;</span><span class="w">   </span><span class="c1">// :744  first = farthest node</span>
 <span class="c1">// each subsequent landmark = farthest from ALL current landmarks</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/lm/LandmarkStorage.java:734</code>–<code>:760</code>; the from/to weights are
-computed by a Dijkstra from each landmark and stored compactly as 16-bit shorts (<code>:406</code>–<code>:475</code>, read at
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/lm/LandmarkStorage.java:734</code>–<code>:760</code>; các weight from/to được
+tính bằng một Dijkstra xuất phát từ mỗi landmark và lưu gọn dưới dạng short 16-bit (<code>:406</code>–<code>:475</code>, đọc ở
 <code>:525</code>–<code>:566</code>).</p>
-<p>The heuristic is the <strong>triangle inequality</strong>. For any landmark <code>L</code>, the true distance <code>d(v,t)</code> is at least
-<code>|d(v,L) − d(t,L)|</code> — a bound you get for free from the stored tables, and a <em>much</em> tighter lower bound than
-a beeline:</p>
+<p>Heuristic ở đây chính là <strong>triangle inequality</strong> (bất đẳng thức tam giác). Với bất kỳ landmark <code>L</code> nào,
+khoảng cách thật <code>d(v,t)</code> luôn ít nhất bằng <code>|d(v,L) − d(t,L)|</code> — một cận bạn có miễn phí từ các bảng đã lưu,
+và là một lower bound chặt hơn beeline <em>rất</em> nhiều:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">int</span><span class="w"> </span><span class="n">rhs1Int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lms</span><span class="p">.</span><span class="na">getToWeight</span><span class="p">(</span><span class="n">activeLandmarkIndices</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">)</span><span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">weightsFromTToActiveLandmarks</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">;</span><span class="w">   </span><span class="c1">// :170</span>
 <span class="kt">int</span><span class="w"> </span><span class="n">rhs2Int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">weightsFromActiveLandmarksToT</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lms</span><span class="p">.</span><span class="na">getFromWeight</span><span class="p">(</span><span class="n">activeLandmarkIndices</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">);</span><span class="w">   </span><span class="c1">// :171</span>
 <span class="c1">// ...</span>
 <span class="k">return</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">max</span><span class="p">(</span><span class="n">rhs1Int</span><span class="p">,</span><span class="w"> </span><span class="n">rhs2Int</span><span class="p">);</span><span class="w">   </span><span class="c1">// :177  best bound over the two directions</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/lm/LMApproximator.java:139</code>–<code>:178</code>; <code>approximate()</code> takes the
-best active landmark and falls back to the beeline, keeping whichever bound is <em>larger</em> (both are admissible,
-so the larger is tighter):</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/lm/LMApproximator.java:139</code>–<code>:178</code>; <code>approximate()</code> lấy
+landmark active tốt nhất và lùi về beeline khi cần, giữ lấy cận nào <em>lớn hơn</em> (cả hai đều admissible, nên cận
+lớn hơn là chặt hơn):</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">return</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">max</span><span class="p">(</span><span class="n">lmApproximation</span><span class="p">,</span><span class="w"> </span><span class="n">beelineApproximation</span><span class="p">.</span><span class="na">approximate</span><span class="p">(</span><span class="n">v</span><span class="p">));</span><span class="w">   </span><span class="c1">// :126</span>
 </code></pre></div></figure>
 
-<p>📌 <code>LMApproximator.java:94</code>–<code>:137</code>. Because <code>LMApproximator implements WeightApproximator</code> (<code>:34</code>), it plugs
-straight into the <em>same</em> A<em> machinery from §3.4 — Landmarks is literally "A</em> with a better <code>h</code>."</p>
-<h2 id="37-tie-together-who-picks-which">3.7 Tie-together — who picks which</h2>
-<p><code>Router</code> makes the call, based purely on what was prepared at import time:</p>
+<p>📌 <code>LMApproximator.java:94</code>–<code>:137</code>. Vì <code>LMApproximator implements WeightApproximator</code> (<code>:34</code>), nó cắm thẳng
+vào <em>đúng</em> bộ máy A<em> ở §3.4 — Landmarks đúng nghĩa đen là "A</em> với một <code>h</code> tốt hơn."</p>
+<h2 id="37-ghep-lai-ai-chon-cai-nao">3.7 Ghép lại — ai chọn cái nào</h2>
+<p><code>Router</code> là nơi đưa ra quyết định, hoàn toàn dựa trên thứ đã được chuẩn bị lúc import:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">chEnabled</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">disableCH</span><span class="p">)</span><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">createCHSolver</span><span class="p">(...);</span><span class="w">    </span><span class="c1">// :193  fastest, fixed weighting</span>
 <span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lmEnabled</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">disableLM</span><span class="p">)</span><span class="w">   </span><span class="k">return</span><span class="w"> </span><span class="n">createLMSolver</span><span class="p">(...);</span><span class="w">    </span><span class="c1">// :195  fast, flexible weighting</span>
 <span class="k">else</span><span class="w">                                </span><span class="k">return</span><span class="w"> </span><span class="n">createFlexSolver</span><span class="p">(...);</span><span class="w">  </span><span class="c1">// :197  plain Dijkstra/A*, fully flexible</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/Router.java:190</code>–<code>:200</code> (<code>chEnabled</code>/<code>lmEnabled</code> = "were CH
-graphs / landmarks built?", <code>:88</code>–<code>:89</code>). The flexible path resolves a string to a concrete algorithm:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/Router.java:190</code>–<code>:200</code> (<code>chEnabled</code>/<code>lmEnabled</code> = "đã build CH
+graph / landmark chưa?", <code>:88</code>–<code>:89</code>). Đường flexible phân giải một string thành một thuật toán cụ thể:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">case</span><span class="w"> </span><span class="n">DIJKSTRA_BI</span><span class="p">:</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">DijkstraBidirectionRef</span><span class="p">(...);</span><span class="w">   </span><span class="c1">// :44</span>
 <span class="k">case</span><span class="w"> </span><span class="n">ASTAR_BI</span><span class="p">:</span><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">AStarBidirection</span><span class="p">(...);</span><span class="w">         </span><span class="c1">// :49  (the default)</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/RoutingAlgorithmFactorySimple.java:40</code>–<code>:60</code>. So the same
-<code>RoutingAlgorithm</code> interface (<code>calcPath</code>, <code>getVisitedNodes</code>, <code>RoutingAlgorithm.java:28</code>) is satisfied by
-plain Dijkstra, A<em>, a CH query, or an LM-guided A</em> — and the whole difference in speed is <em>how much of the
-graph each visits</em> to return the identical optimal path.</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/RoutingAlgorithmFactorySimple.java:40</code>–<code>:60</code>. Thế nên cùng một
+interface <code>RoutingAlgorithm</code> (<code>calcPath</code>, <code>getVisitedNodes</code>, <code>RoutingAlgorithm.java:28</code>) được thoả mãn bởi
+Dijkstra thuần, A<em>, một CH query, hay một A</em> dẫn-đường-bằng-LM — và toàn bộ khác biệt về tốc độ chỉ là <em>mỗi
+cái thăm bao nhiêu phần của graph</em> để trả về đúng cùng một optimal path.</p>
 <h2 id="38-lab-3-dijkstra-vs-a-vs-ch">3.8 Lab 3 — Dijkstra vs A* vs CH</h2>
 <div class="callout lab"><span class="ic">🧪</span>
-<p> <strong>Lab 3.</strong> Read-only. Goal: see, in one number — visited nodes — why the family exists. Record in
-<a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab03-algorithms.md"><code>labs/lab03-algorithms.md</code></a>.</p>
+<p> <strong>Lab 3.</strong> Chỉ đọc. Mục tiêu: thấy, gói trong đúng một con số — số node đã thăm — vì sao cả họ thuật
+toán này tồn tại. Ghi vào <a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab03-algorithms.md"><code>labs/lab03-algorithms.md</code></a>.</p>
 </div>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/Documents/learning/graphhopper
 <span class="c1"># confirm the choke point and the CH upward-only rule:</span>
@@ -364,51 +366,51 @@ curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;htt
 <span class="w">     </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; d=json.load(sys.stdin); print(&#39;flex took(ms)=&#39;, d[&#39;info&#39;][&#39;took&#39;])&quot;</span>
 </code></pre></div></figure>
 
-<p><strong>Expected:</strong> <code>GHUtility.java:461</code> reads <code>weighting.calcEdgeWeight(edgeState, reverse)</code>;
-<code>AbstractBidirCHAlgo.java:295</code> is the <code>getLevel(base) &lt;= getLevel(adj)</code> upward filter; the CH request returns
-in a fraction of the flexible request's time — the <strong>same</strong> distance, far less work. (To disable CH the
-server must have <code>ch.disable</code> allowed; otherwise compare against a build with <code>profiles_ch: []</code>.)</p>
+<p><strong>Kết quả kỳ vọng:</strong> <code>GHUtility.java:461</code> đọc ra <code>weighting.calcEdgeWeight(edgeState, reverse)</code>;
+<code>AbstractBidirCHAlgo.java:295</code> chính là bộ lọc đi-lên <code>getLevel(base) &lt;= getLevel(adj)</code>; request CH trả về
+trong một phần nhỏ thời gian của request flexible — <strong>cùng</strong> một khoảng cách, ít việc hơn nhiều. (Muốn tắt CH
+thì server phải cho phép <code>ch.disable</code>; nếu không thì so với một build có <code>profiles_ch: []</code>.)</p>
 <h2 id="39-checkpoint">3.9 Checkpoint</h2>
 <ol>
-<li>Every algorithm here calls the same method to price an edge. Which method, in which file, and why does
-   that make the <code>Weighting</code> swappable without touching search code?</li>
-<li>GraphHopper's Dijkstra doesn't do a decrease-key. What does it do instead, and where is a stale entry
-   skipped?</li>
-<li>In A*, an <code>AStarEntry</code> holds two weights. What are they, and which one orders the heap vs becomes the
-   parent's path cost? Why must the heuristic under-estimate?</li>
-<li>What does Contraction Hierarchies precompute, what single rule does its <em>query</em> enforce, and what does it
-   give up to get its speed?</li>
-<li>Landmarks is "A* with a better <code>h</code>." Where does that <code>h</code> come from, and why is <code>|d(v,L) − d(t,L)|</code> a
-   valid lower bound?</li>
-<li>Given a request, <code>Router</code> chooses CH, LM, or flexible. What decides, and when would each be right?</li>
+<li>Mọi thuật toán ở đây đều gọi cùng một method để định giá một edge. Method nào, trong file nào, và vì sao
+   điều đó khiến <code>Weighting</code> thay-đổi-được mà không cần đụng vào code search?</li>
+<li>Dijkstra của GraphHopper không làm decrease-key. Vậy nó làm gì thay thế, và một stale entry bị bỏ qua ở
+   đâu?</li>
+<li>Trong A*, một <code>AStarEntry</code> giữ hai weight. Đó là những weight nào, cái nào sắp thứ tự cho heap còn cái nào
+   trở thành path cost của parent? Vì sao heuristic bắt buộc phải ước lượng thấp hơn thực tế?</li>
+<li>Contraction Hierarchies tính sẵn (precompute) những gì, <em>query</em> của nó thực thi đúng một luật nào, và nó
+   hy sinh gì để có tốc độ đó?</li>
+<li>Landmarks là "A* với một <code>h</code> tốt hơn." Cái <code>h</code> đó đến từ đâu, và vì sao <code>|d(v,L) − d(t,L)|</code> là một lower
+   bound hợp lệ?</li>
+<li>Với một request, <code>Router</code> chọn CH, LM, hay flexible. Cái gì quyết định, và khi nào thì mỗi cái là đúng?</li>
 </ol>
 <div class="callout note">
-<p>If #4 is shaky, re-read §3.5. If #3 or #5 is shaky, re-read §3.4 and §3.6 together — they're the same
-A* machinery with different heuristics.</p>
+<p>Nếu #4 còn lung lay, đọc lại §3.5. Nếu #3 hoặc #5 còn lung lay, đọc lại §3.4 và §3.6 cùng nhau — chúng là
+cùng một bộ máy A* với các heuristic khác nhau.</p>
 </div>
 <h2 class="connect" id="connect-to-your-past-eta-dispatch-the-matrix">🔌 Connect to your past (ETA, dispatch &amp; the matrix)</h2>
-<p>This chapter is why GraphHopper is the right engine to study for <em>your</em> work. A ride-hailing backend lives
-and dies on shortest-path queries: the rider's ETA is one <code>route</code>; "which of my 30 nearby drivers is
-closest by road" is a <strong>matrix</strong> of shortest paths (Chapter 7's <code>/matrix</code>/SPT), run on every dispatch. Now
-you know the levers. If those queries need to respect live conditions — a per-request cost that changes with
-traffic or vehicle type — you <em>can't</em> use CH (its weighting is frozen at import); you want <strong>Landmarks</strong>,
-the flexible-but-fast path from §3.6. If the cost function is fixed, CH's ~1000× speedup is free money. And
-for VinBus/BusMap, the same <code>Weighting</code> choke point (§3.3) is where a "buses avoid this street" rule would
-plug in — one method, every algorithm respects it. The family isn't academic; it's the menu you order ETAs
-from.</p>
-<p><strong>Next:</strong> you've seen <em>how</em> the search runs. Now the other half — how you <em>shape</em> what "shortest" means:
-profiles, custom models, and the encoded values the <code>Weighting</code> reads.
+<p>Chương này chính là lý do GraphHopper là engine đúng để nghiên cứu cho công việc của <em>bạn</em>. Một backend gọi
+xe sống chết bằng các shortest-path query: ETA của khách là một <code>route</code>; "trong 30 tài xế gần đây, ai gần
+nhất tính theo đường đi" là một <strong>matrix</strong> các shortest path (<code>/matrix</code>/SPT ở Chương 7), chạy mỗi lần điều
+phối. Giờ bạn đã biết các cần gạt. Nếu những query đó cần tôn trọng điều kiện thời gian thực — một cost theo
+từng request thay đổi theo traffic hay loại xe — bạn <em>không thể</em> dùng CH (weighting của nó bị đóng băng lúc
+import); bạn sẽ muốn <strong>Landmarks</strong>, đường linh-hoạt-mà-vẫn-nhanh ở §3.6. Nếu cost function cố định, cú tăng
+tốc ~1000× của CH là tiền chùa. Và với VinBus/BusMap, chính điểm nghẽn <code>Weighting</code> (§3.3) là nơi một luật "xe
+buýt né phố này" sẽ cắm vào — một method, mọi thuật toán đều tôn trọng nó. Họ thuật toán này không phải chuyện
+hàn lâm; nó là thực đơn mà bạn gọi món ETA từ đó.</p>
+<p><strong>Next:</strong> bạn đã thấy search chạy <em>thế nào</em>. Giờ tới nửa còn lại — cách bạn <em>định hình</em> nghĩa của "ngắn
+nhất": profiles, custom models, và các encoded value mà <code>Weighting</code> đọc.
 → <strong><a href="04-profiles-weighting-custom-models.html">Chapter 04 — Profiles, Weighting &amp; Custom Models</a></strong></p>
-    <nav class="pager"><a class="prev" href="02-the-graph-map-to-network.html"><span class="lbl">← Previous</span><span class="ttl">The Graph — turning a map into a routable network</span></a><a class="next" href="04-profiles-weighting-custom-models.html"><span class="lbl">Next →</span><span class="ttl">Profiles, Weighting &amp; Custom Models</span></a></nav>
+    <nav class="pager"><a class="prev" href="02-the-graph-map-to-network.html"><span class="lbl">← Trước</span><span class="ttl">The Graph — turning a map into a routable network</span></a><a class="next" href="04-profiles-weighting-custom-models.html"><span class="lbl">Tiếp →</span><span class="ttl">Profiles, Weighting &amp; Custom Models</span></a></nav>
   </article></main>
-  <aside class="toc"><nav><h4>On this page</h4>
-<a class="lvl-2" href="#31-why-it-matters">3.1 Why it matters</a>
-<a class="lvl-2" href="#32-mental-model-shrink-the-search-frontier">3.2 Mental model: shrink the search frontier</a>
+  <aside class="toc"><nav><h4>Trong trang này</h4>
+<a class="lvl-2" href="#31-vi-sao-quan-trong">3.1 Vì sao quan trọng</a>
+<a class="lvl-2" href="#32-mental-model-thu-hep-search-frontier">3.2 Mental model: thu hẹp search frontier</a>
 <a class="lvl-2" href="#33-case-study-a-dijkstra">3.3 Case study A — Dijkstra</a>
 <a class="lvl-2" href="#34-case-study-b-a-and-bidirectional">3.4 Case study B — A* and bidirectional</a>
 <a class="lvl-2" href="#35-case-study-c-contraction-hierarchies">3.5 Case study C — Contraction Hierarchies</a>
 <a class="lvl-2" href="#36-case-study-d-landmarks-alt">3.6 Case study D — Landmarks / ALT</a>
-<a class="lvl-2" href="#37-tie-together-who-picks-which">3.7 Tie-together — who picks which</a>
+<a class="lvl-2" href="#37-ghep-lai-ai-chon-cai-nao">3.7 Ghép lại — ai chọn cái nào</a>
 <a class="lvl-2" href="#38-lab-3-dijkstra-vs-a-vs-ch">3.8 Lab 3 — Dijkstra vs A* vs CH</a>
 <a class="lvl-2" href="#39-checkpoint">3.9 Checkpoint</a>
 <a class="lvl-2" href="#connect-to-your-past-eta-dispatch-the-matrix">🔌 Connect to your past (ETA, dispatch &amp; the matrix)</a>
@@ -416,10 +418,10 @@ profiles, custom models, and the encoded values the <code>Weighting</code> reads
 </div>
 <footer class="site-foot">
   <a class="foot-brand" href="https://rumitx.com" target="_blank" rel="noopener"><span class="foot-x">X</span> RumitX</a>
-  GraphHopper Internals Handbook · grounded in <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
-  @ <code>11.0</code> · maps &amp; route-finding, from the source<br>
-  A <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> publication · maps, routing &amp; human-centric mobility
+  GraphHopper Internals Handbook · neo vào <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
+  @ <code>11.0</code> · maps &amp; route-finding, đọc từ source<br>
+  Một ấn phẩm của <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> · maps, routing &amp; human-centric mobility
 </footer>
-<script src="assets/app.js"></script>
+<script src="../assets/app.js"></script>
 </body>
 </html>

@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="vi" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chapter 06 — Map-Matching: snapping GPS to roads · GraphHopper Internals Handbook · RumitX</title>
-<meta name="description" content="A from-the-source handbook on graphhopper/graphhopper: the graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, and the routing web API.">
-<link rel="icon" type="image/svg+xml" href="assets/brand/logo_x.svg">
+<meta name="description" content="Cuốn sách đọc thẳng từ source về graphhopper/graphhopper: graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, và routing web API.">
+<link rel="icon" type="image/svg+xml" href="../assets/brand/logo_x.svg">
 <meta name="author" content="RumitX">
 <meta name="theme-color" content="#0B1E2D">
-<link rel="alternate" hreflang="en" href="06-map-matching.html">
-<link rel="alternate" hreflang="vi" href="vi/06-map-matching.html">
-<link rel="alternate" hreflang="x-default" href="06-map-matching.html">
-<link rel="stylesheet" href="assets/styles.css">
-<link rel="stylesheet" href="assets/code.css">
+<link rel="alternate" hreflang="en" href="../06-map-matching.html">
+<link rel="alternate" hreflang="vi" href="06-map-matching.html">
+<link rel="alternate" hreflang="x-default" href="../06-map-matching.html">
+<link rel="stylesheet" href="../assets/styles.css">
+<link rel="stylesheet" href="../assets/code.css">
 <style>
 .lang-switch{display:inline-flex;align-items:center;gap:.1rem;padding:.15rem;
   border:1px solid var(--border);border-radius:999px;background:var(--surface);
@@ -31,14 +31,14 @@
   <a class="brand" href="index.html"><span class="mark"><span>X</span></span> GraphHopper Internals Handbook</a>
   <span class="spacer"></span>
   <span class="meta-pill">pinned&nbsp;11.0</span>
-  <div class="lang-switch"><span aria-current="true">EN</span><a href="vi/06-map-matching.html" hreflang="vi">VI</a></div>
+  <div class="lang-switch"><a href="../06-map-matching.html" hreflang="en">EN</a><span aria-current="true">VI</span></div>
   <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
 </header>
 <div class="backdrop"></div>
 <div class="shell">
   <aside class="rail"><nav>
-<a class="brand-mini" href="index.html"><img src="assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
-<h4>Chapters</h4>
+<a class="brand-mini" href="index.html"><img src="../assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
+<h4>Chương</h4>
 <a class="" href="00-environment-and-java-refresher.html"><span class="num">00</span><span>Environment &amp; Java Refresher</span></a>
 <a class="" href="01-mental-model-and-the-repo-map.html"><span class="num">01</span><span>Mental Model &amp; the Repo Map</span></a>
 <a class="" href="02-the-graph-map-to-network.html"><span class="num">02</span><span>The Graph — turning a map into a routable network</span></a>
@@ -48,30 +48,30 @@
 <a class="active" href="06-map-matching.html"><span class="num">06</span><span>Map-Matching — snapping GPS to roads</span></a>
 <a class="" href="07-navigation-isochrones-web.html"><span class="num">07</span><span>Navigation, Isochrones &amp; the Web/Tiles Surface</span></a>
 <a class="" href="08-capstone-and-staying-current.html"><span class="num">08</span><span>Capstone &amp; Staying Current</span></a>
-<h4>Reference</h4>
+<h4>Tham khảo</h4>
 <a class="" href="glossary.html"><span class="num">§</span><span>Glossary &amp; Index</span></a>
 <a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener"><span class="num">↗</span><span>GitHub repo</span></a>
 </nav></aside>
   <main class="content"><article class="article">
-    <div class="crumbs"><a href="index.html">Handbook</a> / Chapter 06</div>
+    <div class="crumbs"><a href="index.html">Handbook</a> / Chương 06</div>
     <h1 id="chapter-06-map-matching-snapping-gps-to-roads">Chapter 06 — Map-Matching: snapping GPS to roads</h1>
 <div class="callout goal">
-<p><strong>Goal:</strong> Understand how a noisy GPS trace becomes the road path a driver <em>actually</em> took. After this
-chapter you can explain the Newson–Krumm <strong>Hidden Markov Model</strong> GraphHopper uses: candidate snaps per
-GPS point as <strong>emission</strong> probabilities, routing between candidates as <strong>transition</strong> probabilities, and
-the <strong>Viterbi</strong> pass that picks the single most likely sequence of edges. Pinned to <strong><code>11.0</code></strong> (<code>69e50f6</code>).
-This is the ride-hailing chapter.</p>
+<p><strong>Goal:</strong> Hiểu cách một GPS trace nhiễu biến thành đúng con đường mà tài xế <em>thực sự</em> đã đi. Sau chương
+này bạn giải thích được <strong>Hidden Markov Model</strong> kiểu Newson–Krumm mà GraphHopper dùng: các candidate snap
+của mỗi GPS point là xác suất <strong>emission</strong>, việc route giữa các candidate là xác suất <strong>transition</strong>, và
+lượt <strong>Viterbi</strong> chọn ra đúng một chuỗi edge khả dĩ nhất. Pinned <strong><code>11.0</code></strong> (<code>69e50f6</code>).
+Đây là chương ride-hailing.</p>
 </div>
-<h2 id="61-why-it-matters">6.1 Why it matters</h2>
-<p>GPS lies. In an urban canyon a fix can land 30 metres off, on the wrong side of a divided road, or on a
-parallel street. If you snap each point independently to its nearest edge, you get a path that teleports
-across the median and doubles back — useless for computing the distance a driver drove, the fare, or where
-they actually are. Map-matching solves the <em>sequence</em> problem: given the whole noisy trace and the road
-network, what is the most probable continuous path?</p>
-<p>For ride-hailing this is foundational plumbing. Reconstructing the driver's real route from their GPS
-breadcrumbs is how you compute trip distance and fare, detect off-route detours, and correct an ETA. It's
-the same math whether you call it "trip reconstruction" or "map-matching."</p>
-<h2 id="62-mental-model-a-hidden-markov-model-over-the-road-graph">6.2 Mental model: a Hidden Markov Model over the road graph</h2>
+<h2 id="61-vi-sao-quan-trong">6.1 Vì sao quan trọng</h2>
+<p>GPS nói dối. Trong một hẻm núi đô thị (urban canyon), một điểm định vị có thể rơi lệch 30 mét, nằm sai phía
+của một con đường có dải phân cách, hoặc rơi sang một con phố song song. Nếu bạn snap từng điểm một cách độc
+lập vào edge gần nhất, bạn nhận được một đường đi cứ nhảy dịch qua dải phân cách rồi vòng ngược lại — vô dụng
+khi cần tính quãng đường tài xế đã chạy, tính cước, hay xác định họ thực sự đang ở đâu. Map matching giải bài
+toán <em>chuỗi</em>: cho cả một trace nhiễu và mạng lưới đường, đâu là con đường liên tục có xác suất cao nhất?</p>
+<p>Với ride-hailing đây là phần đường ống nền móng. Dựng lại lộ trình thật của tài xế từ những mẩu vụn GPS chính
+là cách bạn tính quãng đường và cước chuyến, phát hiện việc đi vòng lệch tuyến, và hiệu chỉnh ETA. Vẫn là cùng
+một bài toán toán học dù bạn gọi nó là "trip reconstruction" hay "map matching."</p>
+<h2 id="62-mental-model-mot-hidden-markov-model-tren-road-graph">6.2 Mental model: một Hidden Markov Model trên road graph</h2>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">text</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code>  GPS observations:   o1 ······· o2 ······· o3        (noisy, ~1/sec)
                        │           │           │
         emission P ▼   │  ▼        │  ▼        │  ▼     (how close is each candidate snap?)
@@ -82,20 +82,21 @@ the same math whether you call it "trip reconstruction" or "map-matching."</p>
   Viterbi picks:      a2 ───────▶ b1 ───────▶ c2       ← the single most probable chain
 </code></pre></div></figure>
 
-<p>Two probabilities. <strong>Emission</strong>: how likely is it that the true position is <em>this</em> candidate edge, given
-the GPS point landed where it did? (Closer snap → higher probability, a normal distribution on the snap
-distance.) <strong>Transition</strong>: how likely is it that the driver went from candidate <code>a</code> to candidate <code>b</code>
-between two GPS points? (If the <em>road</em> distance between them is close to the straight-line GPS distance →
-plausible; if the road forces a huge detour → unlikely, an exponential penalty on the difference.) The
-<strong>Viterbi</strong> algorithm finds the highest-probability path through this trellis of candidates.</p>
+<p>Hai xác suất. <strong>Emission</strong>: khả năng vị trí thật đúng là <em>candidate edge này</em> là bao nhiêu, cho trước điểm GPS
+rơi vào chỗ nó rơi? (Snap càng gần → xác suất càng cao, một phân phối chuẩn trên khoảng cách snap.)
+<strong>Transition</strong>: khả năng tài xế đi từ candidate <code>a</code> sang candidate <code>b</code> giữa hai điểm GPS là bao nhiêu? (Nếu
+khoảng cách <em>đường</em> giữa chúng gần với khoảng cách GPS đường thẳng → hợp lý; nếu con đường buộc phải đi vòng
+một quãng lớn → khó xảy ra, một mức phạt mũ trên độ chênh lệch.) Thuật toán <strong>Viterbi</strong> tìm con đường có xác
+suất cao nhất xuyên qua cái trellis các candidate này.</p>
 <div class="callout warn"><span class="ic">⚠️</span>
-<p> <strong>Reading note.</strong> GraphHopper 11 does <strong>not</strong> depend on an external <code>hmm-lib</code> or a <code>ViterbiAlgorithm</code>
-class (older versions did). The HMM types are internalized into the <code>matching</code> package and the Viterbi
-decode is <strong>hand-inlined</strong> as a priority-queue label-setting inside <code>computeViterbiSequence</code>. So grep for
-<code>HmmProbabilities</code> and <code>computeViterbiSequence</code>, not <code>ViterbiAlgorithm</code>.</p>
+<p> <strong>Reading note.</strong> GraphHopper 11 <strong>không</strong> phụ thuộc vào một <code>hmm-lib</code> ngoài hay một class
+<code>ViterbiAlgorithm</code> (các phiên bản cũ thì có). Các kiểu HMM được nội bộ hoá vào package <code>matching</code> và phần
+Viterbi decode được <strong>hand-inline</strong> thành một label-setting kiểu priority-queue bên trong
+<code>computeViterbiSequence</code>. Nên hãy grep <code>HmmProbabilities</code> và <code>computeViterbiSequence</code>, chứ không phải
+<code>ViterbiAlgorithm</code>.</p>
 </div>
-<h2 id="63-the-pipeline-mapmatchingmatch">6.3 The pipeline: <code>MapMatching.match</code></h2>
-<p>One method orchestrates the whole thing:</p>
+<h2 id="63-pipeline-mapmatchingmatch">6.3 Pipeline: <code>MapMatching.match</code></h2>
+<p>Một method điều phối toàn bộ:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="n">MatchResult</span><span class="w"> </span><span class="nf">match</span><span class="p">(</span><span class="n">List</span><span class="o">&lt;</span><span class="n">Observation</span><span class="o">&gt;</span><span class="w"> </span><span class="n">observations</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="c1">// 1) emission: snap each GPS point to several candidate edges</span>
 <span class="w">    </span><span class="n">List</span><span class="o">&lt;</span><span class="n">List</span><span class="o">&lt;</span><span class="n">Snap</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">snapsPerObservation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">filteredObservations</span><span class="p">.</span><span class="na">stream</span><span class="p">()</span>
@@ -111,30 +112,30 @@ decode is <strong>hand-inlined</strong> as a priority-queue label-setting inside
 <span class="w">    </span><span class="n">MatchResult</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">MatchResult</span><span class="p">(</span><span class="n">prepareEdgeMatches</span><span class="p">(</span><span class="n">seq</span><span class="p">));</span><span class="w">           </span><span class="c1">// :226</span>
 </code></pre></div></figure>
 
-<p>📌 <code>map-matching/src/main/java/com/graphhopper/matching/MapMatching.java:198</code>–<code>:226</code> (class at <code>:68</code>, the
-transition tuning constant <code>transitionProbabilityBeta = 2.0</code> at <code>:73</code>). Five steps: emission, query graph,
-trellis, Viterbi, result.</p>
-<h2 id="64-emission-candidate-snaps">6.4 Emission — candidate snaps</h2>
-<p>For each GPS point, find several nearby edges to snap to (not just the closest — the closest is often
-wrong), and sort them by how far the snap is:</p>
+<p>📌 <code>map-matching/src/main/java/com/graphhopper/matching/MapMatching.java:198</code>–<code>:226</code> (class ở <code>:68</code>, hằng số
+tinh chỉnh transition <code>transitionProbabilityBeta = 2.0</code> ở <code>:73</code>). Năm bước: emission, query graph, trellis,
+Viterbi, result.</p>
+<h2 id="64-emission-cac-candidate-snap">6.4 Emission — các candidate snap</h2>
+<p>Với mỗi GPS point, tìm vài edge lân cận để snap vào (không chỉ cái gần nhất — cái gần nhất thường sai), rồi
+sắp xếp chúng theo khoảng cách của snap:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// findCandidateSnaps: collect snaps within a bounding box around the GPS point,</span>
 <span class="c1">// create a Snap per candidate edge, sort by query distance</span>
 <span class="c1">// ...sorted by Snap::getQueryDistance                                       // :320</span>
 </code></pre></div></figure>
 
-<p>📌 <code>MapMatching.java:294</code>–<code>:321</code>. Each candidate then becomes a <strong>directed</strong> <code>State</code> — a snap plus a
-direction of travel — because a road can be traversed either way and the two directions are different
-hypotheses:</p>
+<p>📌 <code>MapMatching.java:294</code>–<code>:321</code>. Mỗi candidate sau đó trở thành một <code>State</code> <strong>có hướng</strong> — một snap cộng thêm
+một chiều di chuyển — bởi một con đường có thể đi theo cả hai chiều và hai chiều đó là hai giả thuyết khác
+nhau:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">candidates</span><span class="p">.</span><span class="na">add</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">State</span><span class="p">(</span><span class="n">observation</span><span class="p">,</span><span class="w"> </span><span class="n">split</span><span class="p">,</span><span class="w"> </span><span class="n">virtualEdges</span><span class="p">.</span><span class="na">get</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="w"> </span><span class="n">virtualEdges</span><span class="p">.</span><span class="na">get</span><span class="p">(</span><span class="mi">1</span><span class="p">)));</span><span class="w">   </span><span class="c1">// :361</span>
 <span class="n">candidates</span><span class="p">.</span><span class="na">add</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">State</span><span class="p">(</span><span class="n">observation</span><span class="p">,</span><span class="w"> </span><span class="n">split</span><span class="p">,</span><span class="w"> </span><span class="n">virtualEdges</span><span class="p">.</span><span class="na">get</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">virtualEdges</span><span class="p">.</span><span class="na">get</span><span class="p">(</span><span class="mi">0</span><span class="p">)));</span><span class="w">   </span><span class="c1">// :362</span>
 </code></pre></div></figure>
 
-<p>📌 <code>MapMatching.java:329</code>–<code>:373</code> (<code>State</code> = snap + incoming/outgoing virtual edge,
-<code>matching/State.java:40</code>; <code>Observation</code> = a GPS point, <code>matching/Observation.java:24</code>).</p>
-<h2 id="65-66-transition-and-the-viterbi-decode">6.5 &amp; 6.6 Transition and the Viterbi decode</h2>
-<p>The Viterbi pass is a label-setting over the trellis: each trellis node holds its best cumulative
-<code>minusLogProbability</code> (we minimize negative-log-probability = maximize probability) and a back-pointer.
-It seeds the first column with <strong>emission</strong> cost, then for each step routes between candidates to score the
+<p>📌 <code>MapMatching.java:329</code>–<code>:373</code> (<code>State</code> = snap + virtual edge incoming/outgoing,
+<code>matching/State.java:40</code>; <code>Observation</code> = một GPS point, <code>matching/Observation.java:24</code>).</p>
+<h2 id="65-66-transition-va-luot-viterbi-decode">6.5 &amp; 6.6 Transition và lượt Viterbi decode</h2>
+<p>Lượt Viterbi là một label-setting trên trellis: mỗi node của trellis giữ giá trị <code>minusLogProbability</code> tích
+luỹ tốt nhất của nó (ta minimize negative-log-probability = maximize probability) và một back-pointer. Nó
+seed cột đầu tiên bằng chi phí <strong>emission</strong>, rồi ở mỗi bước route giữa các candidate để chấm điểm
 <strong>transition</strong>:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="c1">// seed: emission cost of each first-column candidate</span>
 <span class="n">label</span><span class="p">.</span><span class="na">minusLogProbability</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">probabilities</span><span class="p">.</span><span class="na">emissionLogProbability</span><span class="p">(</span><span class="n">distance</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="o">-</span><span class="mf">1.0</span><span class="p">;</span><span class="w">            </span><span class="c1">// :397</span>
@@ -147,10 +148,10 @@ It seeds the first column with <strong>emission</strong> cost, then for each ste
 <span class="w">        </span><span class="o">-</span><span class="w"> </span><span class="n">transitionLogProbability</span><span class="p">;</span><span class="w">                                                             </span><span class="c1">// :426</span>
 </code></pre></div></figure>
 
-<p>📌 <code>MapMatching.java:382</code>–<code>:456</code>. Note <code>router.calcPaths</code> at <code>:418</code> — the transition probability is computed
-by <em>actually running a shortest-path query</em> (Chapter 3!) between each pair of candidates and comparing the
-route length to the straight-line GPS distance. Map-matching is routing used as a probability oracle.</p>
-<p>The two probabilities are the Newson–Krumm model, and they're refreshingly literal:</p>
+<p>📌 <code>MapMatching.java:382</code>–<code>:456</code>. Để ý <code>router.calcPaths</code> ở <code>:418</code> — xác suất transition được tính bằng cách
+<em>thực sự chạy một shortest-path query</em> (Chương 3!) giữa từng cặp candidate rồi so chiều dài route với khoảng
+cách GPS đường thẳng. Map matching chính là routing được dùng như một probability oracle.</p>
+<p>Hai xác suất này chính là model Newson–Krumm, và chúng thẳng thớm đến bất ngờ:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="nf">emissionLogProbability</span><span class="p">(</span><span class="kt">double</span><span class="w"> </span><span class="n">distance</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">Distributions</span><span class="p">.</span><span class="na">logNormalDistribution</span><span class="p">(</span><span class="n">sigma</span><span class="p">,</span><span class="w"> </span><span class="n">distance</span><span class="p">);</span><span class="w">          </span><span class="c1">// :47  closer snap → more likely</span>
 <span class="p">}</span>
@@ -161,10 +162,10 @@ route length to the straight-line GPS distance. Map-matching is routing used as 
 <span class="p">}</span>
 </code></pre></div></figure>
 
-<p>📌 <code>map-matching/src/main/java/com/graphhopper/matching/HmmProbabilities.java:24</code>,<code>:46</code>–<code>:63</code>. <code>sigma</code> is the
-assumed GPS error (metres); <code>beta</code> tunes how harshly a road detour that doesn't match the GPS gap is
-penalized. The Viterbi back-pointers reconstruct the winning chain, and <code>MatchResult</code> exposes the matched
-edges, the matched length, and the merged path:</p>
+<p>📌 <code>map-matching/src/main/java/com/graphhopper/matching/HmmProbabilities.java:24</code>,<code>:46</code>–<code>:63</code>. <code>sigma</code> là sai
+số GPS giả định (mét); <code>beta</code> chỉnh mức phạt nặng nhẹ cho một road detour không khớp với khoảng trống GPS. Các
+back-pointer của Viterbi dựng lại chuỗi thắng cuộc, và <code>MatchResult</code> phơi ra các edge đã match, chiều dài đã
+match, và merged path:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">MatchResult</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">EdgeMatch</span><span class="o">&gt;</span><span class="w"> </span><span class="nf">getEdgeMatches</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span><span class="w">   </span><span class="c1">// :77</span>
 <span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="nf">getMatchLength</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span><span class="w">            </span><span class="c1">// :91  ← the driver&#39;s real distance</span>
@@ -173,15 +174,15 @@ edges, the matched length, and the merged path:</p>
 
 <p>📌 <code>map-matching/src/main/java/com/graphhopper/matching/MatchResult.java:30</code>–<code>:102</code>.</p>
 <div class="callout note"><span class="ic">🧠</span>
-<p> <strong>Mental model:</strong> independent nearest-edge snapping asks "where is each point?" in isolation and gets
-whipsawed by noise. The HMM asks "what <em>sequence</em> of positions best explains <em>all</em> the points, given that
-the driver had to travel a real road between them?" The transition term — road distance ≈ GPS distance —
-is what stops the answer from teleporting across a median.</p>
+<p> <strong>Mental model:</strong> snapping độc lập vào edge gần nhất hỏi "mỗi điểm ở đâu?" một cách cô lập nên bị nhiễu
+quăng quật. HMM thì hỏi "<em>chuỗi</em> vị trí nào giải thích tốt nhất <em>tất cả</em> các điểm, với ràng buộc rằng tài
+xế phải đi trên một con đường thật giữa chúng?" Số hạng transition — road distance ≈ GPS distance — chính
+là thứ ngăn đáp án khỏi nhảy dịch qua dải phân cách.</p>
 </div>
-<h2 id="67-lab-6-match-a-trace">6.7 Lab 6 — match a trace</h2>
+<h2 id="67-lab-6-match-mot-trace">6.7 Lab 6 — match một trace</h2>
 <div class="callout lab"><span class="ic">🧪</span>
-<p> <strong>Lab 6.</strong> Read-only. Goal: see the emission/transition split and match a synthetic trace. Record in
-<a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab06-matching.md"><code>labs/lab06-matching.md</code></a>.</p>
+<p> <strong>Lab 6.</strong> Chỉ đọc. Mục tiêu: thấy được lằn ranh emission/transition và match một synthetic trace. Ghi
+vào <a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab06-matching.md"><code>labs/lab06-matching.md</code></a>.</p>
 </div>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/Documents/learning/graphhopper
 <span class="c1"># confirm the two probabilities and the pipeline steps resolve:</span>
@@ -192,54 +193,54 @@ sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;198,2
 mvn<span class="w"> </span>-q<span class="w"> </span>-pl<span class="w"> </span>map-matching<span class="w"> </span>-Dtest<span class="o">=</span>MapMatchingTest<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-20
 </code></pre></div></figure>
 
-<p><strong>Expected:</strong> <code>HmmProbabilities.java:47</code> is the normal-distribution <strong>emission</strong>, <code>:62</code> the
-exponential-distribution <strong>transition</strong> ("taken from Newson &amp; Krumm"); <code>MapMatching.java:419</code> shows
-<code>router.calcPaths(...)</code> inside the transition step (routing as a probability oracle); and the module's tests
-pass, matching sample GPX traces onto the graph. Record the matched length vs the input trace length —
-they should be close.</p>
+<p><strong>Kết quả kỳ vọng:</strong> <code>HmmProbabilities.java:47</code> là <strong>emission</strong> phân phối chuẩn, <code>:62</code> là <strong>transition</strong> phân
+phối mũ ("taken from Newson &amp; Krumm"); <code>MapMatching.java:419</code> cho thấy <code>router.calcPaths(...)</code> nằm bên trong
+bước transition (routing đóng vai probability oracle); và test của module chạy pass, match các GPX trace mẫu
+lên graph. Ghi lại matched length so với chiều dài trace đầu vào — chúng phải xấp xỉ nhau.</p>
 <h2 id="68-checkpoint">6.8 Checkpoint</h2>
 <ol>
-<li>Why is independent nearest-edge snapping wrong? Give the failure it produces on a divided road.</li>
-<li>In the HMM, what does the <strong>emission</strong> probability score, and what distribution models it?</li>
-<li>What does the <strong>transition</strong> probability score, and why does computing it require running a <em>shortest-path
+<li>Vì sao snapping độc lập vào edge gần nhất lại sai? Nêu lỗi mà nó gây ra trên một con đường có dải phân cách.</li>
+<li>Trong HMM, xác suất <strong>emission</strong> chấm điểm cái gì, và phân phối nào mô hình hoá nó?</li>
+<li>Xác suất <strong>transition</strong> chấm điểm cái gì, và vì sao tính nó lại đòi phải chạy một <em>shortest-path
    query</em>?</li>
-<li>Each candidate becomes <em>two</em> <code>State</code>s. Why two?</li>
-<li>The Viterbi pass minimizes <code>minusLogProbability</code>. Why negative log, and what does the back-pointer give
-   you at the end?</li>
+<li>Mỗi candidate trở thành <em>hai</em> <code>State</code>. Vì sao lại hai?</li>
+<li>Lượt Viterbi minimize <code>minusLogProbability</code>. Vì sao lại negative log, và back-pointer cho bạn cái gì ở
+   cuối cùng?</li>
 </ol>
 <div class="callout note">
-<p>If #3 is shaky, re-read §6.5/§6.6. If #1 is shaky, re-read §6.2.</p>
+<p>Nếu #3 còn lung lay, đọc lại §6.5/§6.6. Nếu #1 còn lung lay, đọc lại §6.2.</p>
 </div>
 <h2 class="connect" id="connect-to-your-past-reconstructing-the-drivers-trip">🔌 Connect to your past (reconstructing the driver's trip)</h2>
-<p>This is the ride-hailing chapter made literal. A driver's phone streams noisy GPS; <code>MapMatching.match</code> turns
-that stream into <code>MatchResult.getMatchLength()</code> — the real kilometres driven, which is your <strong>fare</strong> and
-your <strong>trip distance</strong>. The transition term catches a driver who took a longer detour (the road distance
-won't match the GPS gap unless they really drove it), which is how you'd flag off-route trips. And because
-the transition step <em>is</em> a Chapter 3 routing query, everything you learned about the shortest-path family
-applies here too — map-matching is those algorithms wearing a probabilistic hat. When Uber/Lyft or GreenSM
-shows "your trip: 8.4 km, 22 min," a computation shaped exactly like this produced the 8.4.</p>
-<p><strong>Next:</strong> we've computed routes, journeys, and matched traces. Now the last mile — how the engine turns an
-edge sequence into turn-by-turn instructions and serves everything over its web API.
+<p>Đây là chương ride-hailing được kể theo nghĩa đen. Điện thoại của tài xế phát ra dòng GPS nhiễu;
+<code>MapMatching.match</code> biến dòng đó thành <code>MatchResult.getMatchLength()</code> — số kilômét thực sự đã chạy, cũng chính
+là <strong>fare</strong> và <strong>trip distance</strong> của bạn. Số hạng transition tóm được một tài xế đi vòng xa hơn (road distance
+sẽ không khớp với khoảng trống GPS trừ phi họ thực sự đã chạy quãng đó), và đó là cách bạn gắn cờ những chuyến
+đi off-route. Và vì bước transition <em>chính là</em> một routing query của Chương 3, mọi thứ bạn học về họ
+shortest-path cũng áp dụng ở đây — map matching là chính những thuật toán đó đội thêm chiếc mũ xác suất. Khi
+Uber/Lyft hay GreenSM hiện "chuyến của bạn: 8.4 km, 22 min," một phép tính có hình dạng y hệt thế này đã tạo
+ra con số 8.4.</p>
+<p><strong>Next:</strong> ta đã tính route, journey, và matched trace. Giờ tới chặng cuối — engine biến một chuỗi edge thành
+các chỉ dẫn turn-by-turn và phục vụ tất cả qua web API của nó ra sao.
 → <strong><a href="07-navigation-isochrones-web.html">Chapter 07 — Navigation, Isochrones &amp; the Web/Tiles Surface</a></strong></p>
-    <nav class="pager"><a class="prev" href="05-public-transit-gtfs-raptor.html"><span class="lbl">← Previous</span><span class="ttl">Public Transit — GTFS &amp; RAPTOR</span></a><a class="next" href="07-navigation-isochrones-web.html"><span class="lbl">Next →</span><span class="ttl">Navigation, Isochrones &amp; the Web/Tiles Surface</span></a></nav>
+    <nav class="pager"><a class="prev" href="05-public-transit-gtfs-raptor.html"><span class="lbl">← Trước</span><span class="ttl">Public Transit — GTFS &amp; RAPTOR</span></a><a class="next" href="07-navigation-isochrones-web.html"><span class="lbl">Tiếp →</span><span class="ttl">Navigation, Isochrones &amp; the Web/Tiles Surface</span></a></nav>
   </article></main>
-  <aside class="toc"><nav><h4>On this page</h4>
-<a class="lvl-2" href="#61-why-it-matters">6.1 Why it matters</a>
-<a class="lvl-2" href="#62-mental-model-a-hidden-markov-model-over-the-road-graph">6.2 Mental model: a Hidden Markov Model over the road graph</a>
-<a class="lvl-2" href="#63-the-pipeline-mapmatchingmatch">6.3 The pipeline: MapMatching.match</a>
-<a class="lvl-2" href="#64-emission-candidate-snaps">6.4 Emission — candidate snaps</a>
-<a class="lvl-2" href="#65-66-transition-and-the-viterbi-decode">6.5 &amp; 6.6 Transition and the Viterbi decode</a>
-<a class="lvl-2" href="#67-lab-6-match-a-trace">6.7 Lab 6 — match a trace</a>
+  <aside class="toc"><nav><h4>Trong trang này</h4>
+<a class="lvl-2" href="#61-vi-sao-quan-trong">6.1 Vì sao quan trọng</a>
+<a class="lvl-2" href="#62-mental-model-mot-hidden-markov-model-tren-road-graph">6.2 Mental model: một Hidden Markov Model trên road graph</a>
+<a class="lvl-2" href="#63-pipeline-mapmatchingmatch">6.3 Pipeline: MapMatching.match</a>
+<a class="lvl-2" href="#64-emission-cac-candidate-snap">6.4 Emission — các candidate snap</a>
+<a class="lvl-2" href="#65-66-transition-va-luot-viterbi-decode">6.5 &amp; 6.6 Transition và lượt Viterbi decode</a>
+<a class="lvl-2" href="#67-lab-6-match-mot-trace">6.7 Lab 6 — match một trace</a>
 <a class="lvl-2" href="#68-checkpoint">6.8 Checkpoint</a>
 <a class="lvl-2" href="#connect-to-your-past-reconstructing-the-drivers-trip">🔌 Connect to your past (reconstructing the driver&#x27;s trip)</a>
 </nav></aside>
 </div>
 <footer class="site-foot">
   <a class="foot-brand" href="https://rumitx.com" target="_blank" rel="noopener"><span class="foot-x">X</span> RumitX</a>
-  GraphHopper Internals Handbook · grounded in <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
-  @ <code>11.0</code> · maps &amp; route-finding, from the source<br>
-  A <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> publication · maps, routing &amp; human-centric mobility
+  GraphHopper Internals Handbook · neo vào <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
+  @ <code>11.0</code> · maps &amp; route-finding, đọc từ source<br>
+  Một ấn phẩm của <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> · maps, routing &amp; human-centric mobility
 </footer>
-<script src="assets/app.js"></script>
+<script src="../assets/app.js"></script>
 </body>
 </html>

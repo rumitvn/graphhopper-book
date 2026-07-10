@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="vi" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chapter 02 — The Graph: turning a map into a routable network · GraphHopper Internals Handbook · RumitX</title>
-<meta name="description" content="A from-the-source handbook on graphhopper/graphhopper: the graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, and the routing web API.">
-<link rel="icon" type="image/svg+xml" href="assets/brand/logo_x.svg">
+<meta name="description" content="Cuốn sách đọc thẳng từ source về graphhopper/graphhopper: graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, và routing web API.">
+<link rel="icon" type="image/svg+xml" href="../assets/brand/logo_x.svg">
 <meta name="author" content="RumitX">
 <meta name="theme-color" content="#0B1E2D">
-<link rel="alternate" hreflang="en" href="02-the-graph-map-to-network.html">
-<link rel="alternate" hreflang="vi" href="vi/02-the-graph-map-to-network.html">
-<link rel="alternate" hreflang="x-default" href="02-the-graph-map-to-network.html">
-<link rel="stylesheet" href="assets/styles.css">
-<link rel="stylesheet" href="assets/code.css">
+<link rel="alternate" hreflang="en" href="../02-the-graph-map-to-network.html">
+<link rel="alternate" hreflang="vi" href="02-the-graph-map-to-network.html">
+<link rel="alternate" hreflang="x-default" href="../02-the-graph-map-to-network.html">
+<link rel="stylesheet" href="../assets/styles.css">
+<link rel="stylesheet" href="../assets/code.css">
 <style>
 .lang-switch{display:inline-flex;align-items:center;gap:.1rem;padding:.15rem;
   border:1px solid var(--border);border-radius:999px;background:var(--surface);
@@ -31,14 +31,14 @@
   <a class="brand" href="index.html"><span class="mark"><span>X</span></span> GraphHopper Internals Handbook</a>
   <span class="spacer"></span>
   <span class="meta-pill">pinned&nbsp;11.0</span>
-  <div class="lang-switch"><span aria-current="true">EN</span><a href="vi/02-the-graph-map-to-network.html" hreflang="vi">VI</a></div>
+  <div class="lang-switch"><a href="../02-the-graph-map-to-network.html" hreflang="en">EN</a><span aria-current="true">VI</span></div>
   <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
 </header>
 <div class="backdrop"></div>
 <div class="shell">
   <aside class="rail"><nav>
-<a class="brand-mini" href="index.html"><img src="assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
-<h4>Chapters</h4>
+<a class="brand-mini" href="index.html"><img src="../assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
+<h4>Chương</h4>
 <a class="" href="00-environment-and-java-refresher.html"><span class="num">00</span><span>Environment &amp; Java Refresher</span></a>
 <a class="" href="01-mental-model-and-the-repo-map.html"><span class="num">01</span><span>Mental Model &amp; the Repo Map</span></a>
 <a class="active" href="02-the-graph-map-to-network.html"><span class="num">02</span><span>The Graph — turning a map into a routable network</span></a>
@@ -48,29 +48,29 @@
 <a class="" href="06-map-matching.html"><span class="num">06</span><span>Map-Matching — snapping GPS to roads</span></a>
 <a class="" href="07-navigation-isochrones-web.html"><span class="num">07</span><span>Navigation, Isochrones &amp; the Web/Tiles Surface</span></a>
 <a class="" href="08-capstone-and-staying-current.html"><span class="num">08</span><span>Capstone &amp; Staying Current</span></a>
-<h4>Reference</h4>
+<h4>Tham khảo</h4>
 <a class="" href="glossary.html"><span class="num">§</span><span>Glossary &amp; Index</span></a>
 <a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener"><span class="num">↗</span><span>GitHub repo</span></a>
 </nav></aside>
   <main class="content"><article class="article">
-    <div class="crumbs"><a href="index.html">Handbook</a> / Chapter 02</div>
+    <div class="crumbs"><a href="index.html">Handbook</a> / Chương 02</div>
     <h1 id="chapter-02-the-graph-turning-a-map-into-a-routable-network">Chapter 02 — The Graph: turning a map into a routable network</h1>
 <div class="callout goal">
-<p><strong>Goal:</strong> Understand the substrate every routing algorithm walks. After this chapter you can explain how
-<code>OSMReader</code> turns an <code>.osm.pbf</code> into a <code>BaseGraph</code> of integer-addressed nodes and edges, how an
-<code>EdgeExplorer</code> sweeps one node's neighbours, how the whole thing lives in flat <code>DataAccess</code> arrays (RAM
-or memory-mapped), where an edge's geometry is kept, and how turn restrictions attach to the graph.
-Pinned to <strong><code>11.0</code></strong> (<code>69e50f6</code>).</p>
+<p><strong>Goal:</strong> Hiểu cái nền mà mọi thuật toán routing đi bộ trên đó. Sau chương này bạn giải thích được cách
+<code>OSMReader</code> biến một file <code>.osm.pbf</code> thành một <code>BaseGraph</code> gồm các node và edge đánh địa chỉ bằng số nguyên,
+cách một <code>EdgeExplorer</code> quét qua các neighbour của một node, cách toàn bộ thứ này nằm trong các mảng phẳng
+<code>DataAccess</code> (trên RAM hoặc memory-mapped), geometry của một edge được giữ ở đâu, và turn restriction gắn
+vào graph ra sao. Pinned to <strong><code>11.0</code></strong> (<code>69e50f6</code>).</p>
 </div>
-<h2 id="21-why-it-matters">2.1 Why it matters</h2>
-<p>An algorithm is only as good as the graph it runs on. Chapter 3's Dijkstra and Contraction Hierarchies are
-short and elegant precisely because the graph underneath them is <em>fast</em>: no object allocation per node, no
-hash-map lookups per edge, just integer ids and byte offsets. To read the algorithms without confusion you
-first have to stop picturing <code>class Node { List&lt;Edge&gt; edges; }</code> and start picturing <strong>arrays</strong>.</p>
-<p>This is also the layer where the map itself lives. When BusMap places a stop or draws a road, that stop is
-a <strong>node</strong> and that road is a sequence of <strong>edges</strong> in exactly this structure. Understanding it is
-understanding what "the map" <em>is</em>, concretely, to a routing engine.</p>
-<h2 id="22-mental-model-nodes-and-edges-as-flat-arrays">2.2 Mental model: nodes and edges as flat arrays</h2>
+<h2 id="21-vi-sao-quan-trong">2.1 Vì sao quan trọng</h2>
+<p>Một thuật toán chỉ tốt ngang cái graph nó chạy trên đó. Dijkstra và Contraction Hierarchies ở Chương 3 ngắn
+gọn và thanh lịch chính là nhờ cái graph bên dưới <em>nhanh</em>: không cấp phát object cho mỗi node, không tra
+hash-map cho mỗi edge, chỉ có id số nguyên và byte offset. Muốn đọc các thuật toán mà không rối, trước hết
+bạn phải thôi hình dung <code>class Node { List&lt;Edge&gt; edges; }</code> và bắt đầu hình dung <strong>các mảng</strong>.</p>
+<p>Đây cũng là lớp mà bản thân tấm bản đồ sống. Khi BusMap đặt một trạm hay vẽ một con đường, thì trạm đó là
+một <strong>node</strong> còn con đường đó là một chuỗi <strong>edge</strong> đúng trong cấu trúc này. Hiểu nó là hiểu "tấm bản đồ"
+<em>thực sự là gì</em>, một cách cụ thể, dưới mắt một routing engine.</p>
+<h2 id="22-mental-model-node-va-edge-la-nhung-mang-phang">2.2 Mental model: node và edge là những mảng phẳng</h2>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">text</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code>  OSM ways (&quot;Hauptstraße&quot;, a polyline of many points)
         │  OSMReader.addEdge()  — split at junctions, simplify geometry
         ▼
@@ -91,18 +91,18 @@ understanding what "the map" <em>is</em>, concretely, to a routing engine.</p>
         │   walks A&#39;s edge linked-list      │   MMapDataAccess (mmap files)
 </code></pre></div></figure>
 
-<p>The key idea: a node is an <code>int</code> that indexes into a node array; an edge is an <code>int</code> that indexes into an
-edge array. Each edge record stores its two endpoints <strong>and a pointer to the next edge of each endpoint</strong> —
-a linked list of edges per node, threaded through the same flat array. That's how you enumerate a node's
-neighbours without any per-node <code>List</code>.</p>
+<p>Ý tưởng cốt lõi: một node là một <code>int</code> đánh chỉ mục vào một mảng node; một edge là một <code>int</code> đánh chỉ mục vào
+một mảng edge. Mỗi bản ghi edge lưu hai đầu mút của nó <strong>cùng một con trỏ tới edge kế tiếp của từng đầu mút</strong> —
+một linked list các edge cho mỗi node, luồn xuyên qua chính cái mảng phẳng đó. Đó là cách bạn liệt kê được các
+neighbour của một node mà không cần một <code>List</code> riêng cho từng node.</p>
 <h2 id="23-osm-graph-osmreader">2.3 OSM → graph: <code>OSMReader</code></h2>
-<p>Import is driven by <code>OSMReader</code>:</p>
+<p>Việc import do <code>OSMReader</code> điều khiển:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">OSMReader</span><span class="w"> </span><span class="p">{</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/reader/osm/OSMReader.java:75</code>. The façade wires it up during import
-(<code>GraphHopper.java:952</code>–<code>:961</code>, inside <code>importOSM()</code> at <code>:931</code>) and calls <code>readGraph()</code>, which runs a
-two-pass parse over the PBF:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/reader/osm/OSMReader.java:75</code>. Cái façade nối dây nó lại lúc import
+(<code>GraphHopper.java:952</code>–<code>:961</code>, bên trong <code>importOSM()</code> ở <code>:931</code>) và gọi <code>readGraph()</code>, hàm này chạy một
+pass parse hai lượt trên file PBF:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">readGraph</span><span class="p">()</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">IOException</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="c1">// ...</span>
 <span class="w">    </span><span class="n">WaySegmentParser</span><span class="w"> </span><span class="n">waySegmentParser</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">WaySegmentParser</span><span class="p">.</span><span class="na">Builder</span><span class="p">(</span><span class="n">baseGraph</span><span class="p">.</span><span class="na">getNodeAccess</span><span class="p">(),</span><span class="w"> </span><span class="p">...)</span>
@@ -111,26 +111,26 @@ two-pass parse over the PBF:</p>
 <span class="w">            </span><span class="p">.</span><span class="na">setEdgeHandler</span><span class="p">(</span><span class="k">this</span><span class="p">::</span><span class="n">addEdge</span><span class="p">)</span><span class="w">     </span><span class="c1">// ← the hinge</span>
 </code></pre></div></figure>
 
-<p>📌 <code>OSMReader.java:152</code>–<code>:172</code>. The first pass finds which OSM nodes are <strong>junctions</strong> (referenced by more
-than one way); the second pass walks each accepted way and, at every junction, calls the edge handler. That
-handler is where a stretch of road becomes a graph edge:</p>
+<p>📌 <code>OSMReader.java:152</code>–<code>:172</code>. Lượt thứ nhất tìm xem OSM node nào là <strong>junction</strong> (được tham chiếu bởi nhiều
+hơn một way); lượt thứ hai đi qua từng way được chấp nhận và, tại mỗi junction, gọi edge handler. Cái handler
+đó chính là nơi một đoạn đường trở thành một edge của graph:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">protected</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">addEdge</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">fromIndex</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">toIndex</span><span class="p">,</span><span class="w"> </span><span class="n">PointList</span><span class="w"> </span><span class="n">pointList</span><span class="p">,</span><span class="w"> </span><span class="n">ReaderWay</span><span class="w"> </span><span class="n">way</span><span class="p">,</span><span class="w"> </span><span class="p">...)</span><span class="w"> </span><span class="p">{</span>
 </code></pre></div></figure>
 
-<p>📌 <code>OSMReader.java:318</code> (geometry simplification and elevation happen at <code>:332</code>–<code>:347</code>). One OSM way like
-"Hauptstraße" becomes <em>many</em> edges — one per junction-to-junction segment — each with the intermediate
-points kept as geometry.</p>
+<p>📌 <code>OSMReader.java:318</code> (đơn giản hoá geometry và độ cao xảy ra ở <code>:332</code>–<code>:347</code>). Một OSM way kiểu như
+"Hauptstraße" trở thành <em>nhiều</em> edge — mỗi đoạn junction-tới-junction một edge — mỗi cái giữ lại các điểm
+trung gian làm geometry.</p>
 <div class="callout note"><span class="ic">🧠</span>
-<p> <strong>Mental model:</strong> a routing <strong>edge</strong> is not an OSM way. It is a way <em>segment between two junctions</em>.
-The bends in the road between those junctions are geometry (a <code>PointList</code>), not extra nodes. This keeps
-the graph small (few nodes) while preserving the shape for drawing and distance.</p>
+<p> <strong>Mental model:</strong> một <strong>edge</strong> routing không phải là một OSM way. Nó là một <em>đoạn của way nằm giữa hai
+junction</em>. Những chỗ đường cong giữa hai junction đó là geometry (một <code>PointList</code>), không phải node phụ.
+Cách này giữ cho graph nhỏ (ít node) mà vẫn bảo toàn hình dạng để vẽ và tính khoảng cách.</p>
 </div>
-<h2 id="24-the-basegraph-creating-an-edge">2.4 The <code>BaseGraph</code>: creating an edge</h2>
-<p><code>BaseGraph</code> is the store:</p>
+<h2 id="24-basegraph-tao-mot-edge">2.4 <code>BaseGraph</code>: tạo một edge</h2>
+<p><code>BaseGraph</code> là cái kho:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">BaseGraph</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">Graph</span><span class="p">,</span><span class="w"> </span><span class="n">Closeable</span><span class="w"> </span><span class="p">{</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/storage/BaseGraph.java:49</code>. <code>addEdge</code> ultimately calls:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/storage/BaseGraph.java:49</code>. Rốt cuộc <code>addEdge</code> gọi tới:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="n">EdgeIteratorState</span><span class="w"> </span><span class="nf">edge</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">nodeA</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">nodeB</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">isFrozen</span><span class="p">())</span>
 <span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">IllegalStateException</span><span class="p">(</span><span class="s">&quot;Cannot create edge if graph is already frozen&quot;</span><span class="p">);</span>
@@ -140,34 +140,34 @@ the graph small (few nodes) while preserving the shape for drawing and distance.
 <span class="w">    </span><span class="kt">boolean</span><span class="w"> </span><span class="n">valid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">edge</span><span class="p">.</span><span class="na">init</span><span class="p">(</span><span class="n">edgeId</span><span class="p">,</span><span class="w"> </span><span class="n">nodeB</span><span class="p">);</span>
 </code></pre></div></figure>
 
-<p>📌 <code>BaseGraph.java:291</code>–<code>:307</code>. Note <code>isFrozen()</code>: once import finishes and CH/LM preparation begins, the
-graph is <strong>frozen</strong> — no new base edges, only shortcuts (Chapter 3). Node coordinates go through
-<code>getNodeAccess()</code> (<code>:156</code>); edge iteration through <code>createEdgeExplorer(...)</code> (<code>:410</code>–<code>:412</code>); turn costs
-through <code>getTurnCostStorage()</code> (<code>:425</code>–<code>:427</code>).</p>
-<p>The coordinates themselves live in <code>NodeAccess</code> (a <code>PointAccess</code>):</p>
+<p>📌 <code>BaseGraph.java:291</code>–<code>:307</code>. Để ý <code>isFrozen()</code>: khi import xong và quá trình chuẩn bị CH/LM bắt đầu, graph
+bị <strong>frozen</strong> — không thêm base edge mới nữa, chỉ có shortcut (Chương 3). Toạ độ node đi qua <code>getNodeAccess()</code>
+(<code>:156</code>); việc lặp edge đi qua <code>createEdgeExplorer(...)</code> (<code>:410</code>–<code>:412</code>); turn cost đi qua
+<code>getTurnCostStorage()</code> (<code>:425</code>–<code>:427</code>).</p>
+<p>Bản thân toạ độ sống trong <code>NodeAccess</code> (một <code>PointAccess</code>):</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">interface</span> <span class="nc">NodeAccess</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">PointAccess</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/storage/NodeAccess.java:30</code>; coordinates via
-<code>PointAccess.setNode(...)</code> (<code>:50</code>), <code>getLat(int)</code> (<code>:55</code>), <code>getLon(int)</code> (<code>:60</code>). An edge's <em>shape</em> between
-its endpoints is a <code>PointList</code>:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/storage/NodeAccess.java:30</code>; toạ độ qua <code>PointAccess.setNode(...)</code>
+(<code>:50</code>), <code>getLat(int)</code> (<code>:55</code>), <code>getLon(int)</code> (<code>:60</code>). <em>Hình dạng</em> của một edge giữa hai đầu mút của nó là một
+<code>PointList</code>:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">PointList</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">Iterable</span><span class="o">&lt;</span><span class="n">GHPoint3D</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">PointAccess</span><span class="w"> </span><span class="p">{</span>
 </code></pre></div></figure>
 
-<p>📌 <code>web-api/src/main/java/com/graphhopper/util/PointList.java:40</code> (<code>add(lat, lon)</code> at <code>:199</code>).</p>
-<h2 id="25-sweeping-a-nodes-edges-the-cursor-idiom">2.5 Sweeping a node's edges: the cursor idiom</h2>
-<p>You never get a <code>List&lt;Edge&gt;</code>. You get a <strong>cursor</strong> that advances over the edge linked-list:</p>
+<p>📌 <code>web-api/src/main/java/com/graphhopper/util/PointList.java:40</code> (<code>add(lat, lon)</code> ở <code>:199</code>).</p>
+<h2 id="25-quet-cac-edge-cua-mot-node-idiom-cursor">2.5 Quét các edge của một node: idiom cursor</h2>
+<p>Bạn không bao giờ nhận được một <code>List&lt;Edge&gt;</code>. Bạn nhận được một <strong>cursor</strong> tiến dần qua linked list các edge:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">interface</span> <span class="nc">EdgeExplorer</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">EdgeIterator</span><span class="w"> </span><span class="nf">setBaseNode</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">baseNode</span><span class="p">);</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/util/EdgeExplorer.java:29</code>,<code>:37</code>. The returned iterator is <em>itself</em>
-an edge view, mutated in place as you advance:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/util/EdgeExplorer.java:29</code>,<code>:37</code>. Cái iterator trả về <em>bản thân nó</em>
+là một khung nhìn edge, bị mutate tại chỗ khi bạn tiến tới:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">interface</span> <span class="nc">EdgeIterator</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">EdgeIteratorState</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="kt">boolean</span><span class="w"> </span><span class="nf">next</span><span class="p">();</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/util/EdgeIterator.java:41</code>,<code>:60</code>. So the loop reads:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/util/EdgeIterator.java:41</code>,<code>:60</code>. Nên vòng lặp đọc như sau:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">EdgeExplorer</span><span class="w"> </span><span class="n">explorer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">graph</span><span class="p">.</span><span class="na">createEdgeExplorer</span><span class="p">();</span>
 <span class="n">EdgeIterator</span><span class="w"> </span><span class="n">iter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">explorer</span><span class="p">.</span><span class="na">setBaseNode</span><span class="p">(</span><span class="n">node</span><span class="p">);</span>
 <span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">iter</span><span class="p">.</span><span class="na">next</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
@@ -177,43 +177,44 @@ an edge view, mutated in place as you advance:</p>
 <span class="p">}</span>
 </code></pre></div></figure>
 
-<p>Those accessors are <code>EdgeIteratorState</code> — the read interface for one edge: <code>getEdge()</code> (<code>:104</code>),
+<p>Những accessor đó thuộc <code>EdgeIteratorState</code> — interface đọc cho một edge: <code>getEdge()</code> (<code>:104</code>),
 <code>getBaseNode()</code> (<code>:127</code>), <code>getAdjNode()</code> (<code>:133</code>), <code>fetchWayGeometry(FetchMode)</code> (<code>:145</code>), <code>getDistance()</code>
 (<code>:158</code>). 📌 <code>core/src/main/java/com/graphhopper/util/EdgeIteratorState.java:42</code>.</p>
 <div class="callout warn"><span class="ic">⚠️</span>
-<p> The iterator is a <strong>flyweight</strong>: <code>iter</code> doesn't hold one edge, it <em>is</em> a moving window. Don't stash a
-reference to it expecting it to stay put — read the fields you need each iteration. This is the classic
-footgun when you first write graph-walking code against GraphHopper.</p>
+<p> Cái iterator là một <strong>flyweight</strong>: <code>iter</code> không nắm giữ một edge, nó <em>là</em> một cửa sổ di chuyển. Đừng cất
+một reference tới nó rồi mong nó đứng yên — hãy đọc các field bạn cần ở từng vòng lặp. Đây là footgun kinh
+điển khi bạn lần đầu viết code đi bộ trên graph với GraphHopper.</p>
 </div>
 <h2 id="26-storage-ram-vs-memory-mapped">2.6 Storage: RAM vs memory-mapped</h2>
-<p>All of the above — node array, edge array, geometry — is bytes behind a <code>DataAccess</code> (§0.6). Two backings:</p>
+<p>Tất cả những thứ ở trên — mảng node, mảng edge, geometry — là byte nằm sau một <code>DataAccess</code> (§0.6). Có hai
+backing:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">RAMDataAccess</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">AbstractDataAccess</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">byte</span><span class="o">[][]</span><span class="w"> </span><span class="n">segments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="kt">byte</span><span class="o">[</span><span class="mi">0</span><span class="o">][]</span><span class="p">;</span><span class="w">     </span><span class="c1">// on-heap</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/storage/RAMDataAccess.java:35</code>–<code>:36</code> (the default). Or memory-mapped,
-so a country-sized graph never fully enters the JVM heap:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/storage/RAMDataAccess.java:35</code>–<code>:36</code> (mặc định). Hoặc memory-mapped, để
+một graph cỡ cả một quốc gia không bao giờ vào hẳn trong JVM heap:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">buf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">raFile</span><span class="p">.</span><span class="na">getChannel</span><span class="p">().</span><span class="na">map</span><span class="p">(</span>
 <span class="w">        </span><span class="n">allowWrites</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">FileChannel</span><span class="p">.</span><span class="na">MapMode</span><span class="p">.</span><span class="na">READ_WRITE</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">FileChannel</span><span class="p">.</span><span class="na">MapMode</span><span class="p">.</span><span class="na">READ_ONLY</span><span class="p">,</span><span class="w"> </span><span class="n">offset</span><span class="p">,</span><span class="w"> </span><span class="n">byteCount</span><span class="p">);</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/storage/MMapDataAccess.java:163</code>–<code>:164</code> (class at <code>:49</code>). This is the
-knob that lets the same code serve Andorra on a laptop and a continent on a server.</p>
-<h2 id="27-turn-restrictions-live-on-the-graph">2.7 Turn restrictions live on the graph</h2>
-<p>"No left turn here" isn't a property of a road — it's a property of a <em>(fromEdge, viaNode, toEdge)</em> triple.
-GraphHopper stores exactly that:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/storage/MMapDataAccess.java:163</code>–<code>:164</code> (class ở <code>:49</code>). Đây chính là
+cái núm cho phép cùng một đoạn code phục vụ Andorra trên một laptop và cả một lục địa trên một server.</p>
+<h2 id="27-turn-restriction-song-tren-graph">2.7 Turn restriction sống trên graph</h2>
+<p>"Cấm rẽ trái ở đây" không phải là thuộc tính của một con đường — nó là thuộc tính của một bộ ba <em>(fromEdge,
+viaNode, toEdge)</em>. GraphHopper lưu đúng như thế:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">TurnCostStorage</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="c1">// set(BooleanEncodedValue bev, int fromEdge, int viaNode, int toEdge, boolean value)   :90</span>
 <span class="w">    </span><span class="c1">// set(DecimalEncodedValue turnCostEnc, int fromEdge, int viaNode, int toEdge, double)   :100</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/storage/TurnCostStorage.java:39</code>. A restriction is a turn cost of
-infinity; a cost is a finite penalty (seconds). The via-node links back through
-<code>getNodeAccess().setTurnCostIndex(viaNode, index)</code> (<code>:114</code>). Chapter 3 shows where the algorithms add this
-turn weight (spoiler: through one shared <code>GHUtility</code> call).</p>
-<h2 id="28-lab-2-read-the-graph">2.8 Lab 2 — read the graph</h2>
+<p>📌 <code>core/src/main/java/com/graphhopper/storage/TurnCostStorage.java:39</code>. Một restriction là một turn cost vô
+cực; một cost là một penalty hữu hạn (tính bằng giây). Via-node liên kết ngược qua
+<code>getNodeAccess().setTurnCostIndex(viaNode, index)</code> (<code>:114</code>). Chương 3 chỉ ra nơi các thuật toán cộng cái turn
+weight này (spoiler: qua đúng một lời gọi <code>GHUtility</code> dùng chung).</p>
+<h2 id="28-lab-2-oc-graph">2.8 Lab 2 — đọc graph</h2>
 <div class="callout lab"><span class="ic">🧪</span>
-<p> <strong>Lab 2.</strong> Read-only. Goal: size the graph you imported and sweep one node's edges. Record in
+<p> <strong>Lab 2.</strong> Chỉ đọc. Mục tiêu: đo kích thước graph bạn đã import và quét các edge của một node. Ghi vào
 <a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab02-graph.md"><code>labs/lab02-graph.md</code></a>.</p>
 </div>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/Documents/learning/graphhopper
@@ -226,56 +227,56 @@ sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;163,1
 grep<span class="w"> </span>-R<span class="w"> </span><span class="s2">&quot;nodes:&quot;</span><span class="w"> </span>graph-cache/<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;check the server import log for &#39;nodes:...edges:...&#39;&quot;</span>
 </code></pre></div></figure>
 
-<p>Then reason about the numbers: for a road network, edges ≈ 1.1–1.3 × nodes, so average degree (edges·2 /
-nodes) is small — <strong>~2–3</strong>. That low degree is <em>why</em> graph search is fast: each settled node only relaxes a
-handful of neighbours.</p>
-<p><strong>Expected:</strong> <code>BaseGraph.java:291</code> reads <code>public EdgeIteratorState edge(int nodeA, int nodeB)</code>;
-<code>EdgeExplorer.java:37</code> reads <code>EdgeIterator setBaseNode(int baseNode);</code>; and the import log reports node/edge
-counts whose ratio is close to 1. Record the counts and the average degree.</p>
+<p>Rồi suy luận về các con số: với một mạng lưới đường bộ, edge ≈ 1.1–1.3 × node, nên bậc trung bình (edge·2 /
+node) khá nhỏ — <strong>~2–3</strong>. Cái bậc thấp đó <em>chính là lý do</em> graph search nhanh: mỗi node đã settle chỉ relax
+một dúm neighbour.</p>
+<p><strong>Expected:</strong> <code>BaseGraph.java:291</code> đọc ra <code>public EdgeIteratorState edge(int nodeA, int nodeB)</code>;
+<code>EdgeExplorer.java:37</code> đọc ra <code>EdgeIterator setBaseNode(int baseNode);</code>; và log import báo số lượng node/edge
+với tỉ lệ gần bằng 1. Ghi lại các con số và bậc trung bình.</p>
 <h2 id="29-checkpoint">2.9 Checkpoint</h2>
 <ol>
-<li>A node and an edge are each an <code>int</code>. How does the graph enumerate a node's neighbours <em>without</em> a
-   per-node <code>List</code>?</li>
-<li>One OSM way "Hauptstraße" becomes several routing edges. What splits it, and where do the road's bends
-   go if not into nodes?</li>
-<li>What does <code>isFrozen()</code> protect against, and which later phase needs the graph frozen?</li>
-<li>When would you choose <code>MMapDataAccess</code> over <code>RAMDataAccess</code>, and what line actually does the mapping?</li>
-<li>A "no left turn" rule is stored against what triple, in which class?</li>
+<li>Một node và một edge đều là một <code>int</code>. Graph liệt kê các neighbour của một node <em>mà không</em> cần một <code>List</code>
+   riêng cho mỗi node bằng cách nào?</li>
+<li>Một OSM way "Hauptstraße" trở thành vài edge routing. Cái gì chẻ nó ra, và các chỗ cong của con đường đi
+   đâu nếu không vào node?</li>
+<li><code>isFrozen()</code> bảo vệ chống lại điều gì, và pha nào về sau cần graph ở trạng thái frozen?</li>
+<li>Khi nào bạn sẽ chọn <code>MMapDataAccess</code> thay vì <code>RAMDataAccess</code>, và dòng nào thực sự làm việc mapping?</li>
+<li>Một luật "cấm rẽ trái" được lưu theo bộ ba nào, trong class nào?</li>
 </ol>
 <div class="callout note">
-<p>If #1 is shaky, re-read §2.2 and §2.5. If #3 is shaky, hold it — Chapter 3 §3.4 pays it off.</p>
+<p>Nếu #1 còn lung lay, đọc lại §2.2 và §2.5. Nếu #3 còn lung lay, cứ giữ lấy — Chương 3 §3.4 sẽ trả cả vốn lẫn lãi.</p>
 </div>
 <h2 class="connect" id="connect-to-your-past-a-transit-map-is-a-graph">🔌 Connect to your past (a transit map <em>is</em> a graph)</h2>
-<p>BusMap's world maps directly onto this structure. A <strong>stop</strong> is a node; a <strong>route segment</strong> between two
-stops is an edge; the shape of the road the bus follows between them is the edge's <code>PointList</code> geometry;
-"buses can't turn here" is a <code>TurnCostStorage</code> entry. When Chapter 5 builds a <em>transit</em> graph from GTFS,
-it reuses this exact machinery — stops and platforms become nodes, boarding/riding/alighting become edges —
-just with time folded in. And for ride-hailing, this is the network a driver's GPS trace gets matched onto
-in Chapter 6: map-matching is "which sequence of <em>these edges</em> did the driver actually travel?" Every later
-chapter is an algorithm walking the arrays you just met.</p>
-<p><strong>Next:</strong> the graph is built and frozen. Now the main event — the algorithms that find the shortest path
-across it. → <strong><a href="03-shortest-path-algorithms.html">Chapter 03 — The Shortest-Path Algorithm Family</a></strong></p>
-    <nav class="pager"><a class="prev" href="01-mental-model-and-the-repo-map.html"><span class="lbl">← Previous</span><span class="ttl">Mental Model &amp; the Repo Map</span></a><a class="next" href="03-shortest-path-algorithms.html"><span class="lbl">Next →</span><span class="ttl">The Shortest-Path Algorithm Family</span></a></nav>
+<p>Thế giới của BusMap ánh xạ thẳng vào cấu trúc này. Một <strong>trạm</strong> là một node; một <strong>đoạn tuyến</strong> giữa hai trạm
+là một edge; hình dạng con đường mà xe buýt đi theo giữa chúng là geometry <code>PointList</code> của edge; "xe buýt
+không rẽ được ở đây" là một entry trong <code>TurnCostStorage</code>. Khi Chương 5 dựng một graph <em>transit</em> từ GTFS, nó
+tái dùng đúng bộ máy này — trạm và platform trở thành node, boarding/riding/alighting trở thành edge — chỉ là
+có thêm thời gian gấp vào. Còn với ride-hailing, đây là mạng lưới mà một GPS trace của tài xế được map-match
+lên trong Chương 6: map-matching là "chuỗi <em>các edge này</em> nào là chuỗi mà tài xế thực sự đã đi?". Mọi chương
+về sau đều là một thuật toán đi bộ trên chính những mảng bạn vừa gặp.</p>
+<p><strong>Next:</strong> graph đã được dựng và frozen. Giờ là màn chính — các thuật toán tìm đường ngắn nhất băng qua nó. →
+<strong><a href="03-shortest-path-algorithms.html">Chapter 03 — The Shortest-Path Algorithm Family</a></strong></p>
+    <nav class="pager"><a class="prev" href="01-mental-model-and-the-repo-map.html"><span class="lbl">← Trước</span><span class="ttl">Mental Model &amp; the Repo Map</span></a><a class="next" href="03-shortest-path-algorithms.html"><span class="lbl">Tiếp →</span><span class="ttl">The Shortest-Path Algorithm Family</span></a></nav>
   </article></main>
-  <aside class="toc"><nav><h4>On this page</h4>
-<a class="lvl-2" href="#21-why-it-matters">2.1 Why it matters</a>
-<a class="lvl-2" href="#22-mental-model-nodes-and-edges-as-flat-arrays">2.2 Mental model: nodes and edges as flat arrays</a>
+  <aside class="toc"><nav><h4>Trong trang này</h4>
+<a class="lvl-2" href="#21-vi-sao-quan-trong">2.1 Vì sao quan trọng</a>
+<a class="lvl-2" href="#22-mental-model-node-va-edge-la-nhung-mang-phang">2.2 Mental model: node và edge là những mảng phẳng</a>
 <a class="lvl-2" href="#23-osm-graph-osmreader">2.3 OSM → graph: OSMReader</a>
-<a class="lvl-2" href="#24-the-basegraph-creating-an-edge">2.4 The BaseGraph: creating an edge</a>
-<a class="lvl-2" href="#25-sweeping-a-nodes-edges-the-cursor-idiom">2.5 Sweeping a node&#x27;s edges: the cursor idiom</a>
+<a class="lvl-2" href="#24-basegraph-tao-mot-edge">2.4 BaseGraph: tạo một edge</a>
+<a class="lvl-2" href="#25-quet-cac-edge-cua-mot-node-idiom-cursor">2.5 Quét các edge của một node: idiom cursor</a>
 <a class="lvl-2" href="#26-storage-ram-vs-memory-mapped">2.6 Storage: RAM vs memory-mapped</a>
-<a class="lvl-2" href="#27-turn-restrictions-live-on-the-graph">2.7 Turn restrictions live on the graph</a>
-<a class="lvl-2" href="#28-lab-2-read-the-graph">2.8 Lab 2 — read the graph</a>
+<a class="lvl-2" href="#27-turn-restriction-song-tren-graph">2.7 Turn restriction sống trên graph</a>
+<a class="lvl-2" href="#28-lab-2-oc-graph">2.8 Lab 2 — đọc graph</a>
 <a class="lvl-2" href="#29-checkpoint">2.9 Checkpoint</a>
 <a class="lvl-2" href="#connect-to-your-past-a-transit-map-is-a-graph">🔌 Connect to your past (a transit map is a graph)</a>
 </nav></aside>
 </div>
 <footer class="site-foot">
   <a class="foot-brand" href="https://rumitx.com" target="_blank" rel="noopener"><span class="foot-x">X</span> RumitX</a>
-  GraphHopper Internals Handbook · grounded in <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
-  @ <code>11.0</code> · maps &amp; route-finding, from the source<br>
-  A <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> publication · maps, routing &amp; human-centric mobility
+  GraphHopper Internals Handbook · neo vào <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
+  @ <code>11.0</code> · maps &amp; route-finding, đọc từ source<br>
+  Một ấn phẩm của <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> · maps, routing &amp; human-centric mobility
 </footer>
-<script src="assets/app.js"></script>
+<script src="../assets/app.js"></script>
 </body>
 </html>

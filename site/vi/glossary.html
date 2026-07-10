@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="vi" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Glossary &amp; Source Index · GraphHopper Internals Handbook · RumitX</title>
-<meta name="description" content="A from-the-source handbook on graphhopper/graphhopper: the graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, and the routing web API.">
-<link rel="icon" type="image/svg+xml" href="assets/brand/logo_x.svg">
+<meta name="description" content="Cuốn sách đọc thẳng từ source về graphhopper/graphhopper: graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, và routing web API.">
+<link rel="icon" type="image/svg+xml" href="../assets/brand/logo_x.svg">
 <meta name="author" content="RumitX">
 <meta name="theme-color" content="#0B1E2D">
-<link rel="alternate" hreflang="en" href="glossary.html">
-<link rel="alternate" hreflang="vi" href="vi/glossary.html">
-<link rel="alternate" hreflang="x-default" href="glossary.html">
-<link rel="stylesheet" href="assets/styles.css">
-<link rel="stylesheet" href="assets/code.css">
+<link rel="alternate" hreflang="en" href="../glossary.html">
+<link rel="alternate" hreflang="vi" href="glossary.html">
+<link rel="alternate" hreflang="x-default" href="../glossary.html">
+<link rel="stylesheet" href="../assets/styles.css">
+<link rel="stylesheet" href="../assets/code.css">
 <style>
 .lang-switch{display:inline-flex;align-items:center;gap:.1rem;padding:.15rem;
   border:1px solid var(--border);border-radius:999px;background:var(--surface);
@@ -31,14 +31,14 @@
   <a class="brand" href="index.html"><span class="mark"><span>X</span></span> GraphHopper Internals Handbook</a>
   <span class="spacer"></span>
   <span class="meta-pill">pinned&nbsp;11.0</span>
-  <div class="lang-switch"><span aria-current="true">EN</span><a href="vi/glossary.html" hreflang="vi">VI</a></div>
+  <div class="lang-switch"><a href="../glossary.html" hreflang="en">EN</a><span aria-current="true">VI</span></div>
   <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
 </header>
 <div class="backdrop"></div>
 <div class="shell">
   <aside class="rail"><nav>
-<a class="brand-mini" href="index.html"><img src="assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
-<h4>Chapters</h4>
+<a class="brand-mini" href="index.html"><img src="../assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
+<h4>Chương</h4>
 <a class="" href="00-environment-and-java-refresher.html"><span class="num">00</span><span>Environment &amp; Java Refresher</span></a>
 <a class="" href="01-mental-model-and-the-repo-map.html"><span class="num">01</span><span>Mental Model &amp; the Repo Map</span></a>
 <a class="" href="02-the-graph-map-to-network.html"><span class="num">02</span><span>The Graph — turning a map into a routable network</span></a>
@@ -48,231 +48,231 @@
 <a class="" href="06-map-matching.html"><span class="num">06</span><span>Map-Matching — snapping GPS to roads</span></a>
 <a class="" href="07-navigation-isochrones-web.html"><span class="num">07</span><span>Navigation, Isochrones &amp; the Web/Tiles Surface</span></a>
 <a class="" href="08-capstone-and-staying-current.html"><span class="num">08</span><span>Capstone &amp; Staying Current</span></a>
-<h4>Reference</h4>
+<h4>Tham khảo</h4>
 <a class="active" href="glossary.html"><span class="num">§</span><span>Glossary &amp; Index</span></a>
 <a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener"><span class="num">↗</span><span>GitHub repo</span></a>
 </nav></aside>
   <main class="content"><article class="article">
-    <div class="crumbs"><a href="index.html">Handbook</a> / Reference</div>
+    <div class="crumbs"><a href="index.html">Handbook</a> / Tham khảo</div>
     <h1 id="glossary-source-index">Glossary &amp; Source Index</h1>
 <div class="callout note">
 <p>Terms and the <strong>Key files</strong> source index for the <strong>GraphHopper Internals Handbook</strong>, grounded in
 <a href="https://github.com/graphhopper/graphhopper"><code>graphhopper/graphhopper</code></a> @ <strong><code>11.0</code></strong> (<code>69e50f6</code>). Line
 numbers are pinned to this ref — re-verify after re-pinning (Chapter 8).</p>
 </div>
-<h2 id="graph-storage">Graph &amp; storage</h2>
+<h2 id="graph-luu-tru">Graph &amp; lưu trữ</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Term</th>
-<th>Meaning</th>
+<th>Nghĩa</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong><code>GraphHopper</code> (façade)</strong></td>
-<td>The public entry class; configure with fluent setters, then <code>importOrLoad()</code> and <code>route()</code>.</td>
+<td>Class entry công khai; cấu hình bằng các fluent setter, rồi gọi <code>importOrLoad()</code> và <code>route()</code>.</td>
 </tr>
 <tr>
 <td><strong>import vs query</strong></td>
-<td>The two phases: <code>importOrLoad()</code> builds/loads the graph + CH/LM once; <code>route()</code> runs read-only per request.</td>
+<td>Hai pha: <code>importOrLoad()</code> build/load graph + CH/LM một lần; <code>route()</code> chạy read-only cho mỗi request.</td>
 </tr>
 <tr>
 <td><strong><code>graph-cache/</code></strong></td>
-<td>The on-disk directory the import writes; a warm start memory-maps it instead of re-parsing OSM.</td>
+<td>Thư mục trên đĩa mà bước import ghi ra; một warm start sẽ memory-map nó thay vì parse lại OSM.</td>
 </tr>
 <tr>
 <td><strong><code>BaseGraph</code></strong></td>
-<td>The road network stored as flat, integer-addressed node and edge arrays (not objects).</td>
+<td>Mạng lưới đường được lưu dưới dạng các mảng node và edge phẳng, đánh địa chỉ bằng integer (không phải object).</td>
 </tr>
 <tr>
 <td><strong>node / edge</strong></td>
-<td>Each is an <code>int</code> id indexing into a flat array; an edge stores its two endpoints + a next-edge pointer per endpoint.</td>
+<td>Mỗi cái là một id kiểu <code>int</code> trỏ vào một mảng phẳng; một edge lưu hai endpoint của nó + một con trỏ next-edge cho mỗi endpoint.</td>
 </tr>
 <tr>
 <td><strong><code>OSMReader</code></strong></td>
-<td>Parses an <code>.osm.pbf</code>; splits ways at junctions and calls <code>addEdge</code> to create graph edges.</td>
+<td>Parse một file <code>.osm.pbf</code>; cắt các way tại giao lộ rồi gọi <code>addEdge</code> để tạo edge của graph.</td>
 </tr>
 <tr>
 <td><strong><code>EdgeExplorer</code> / <code>EdgeIterator</code></strong></td>
-<td>A cursor that sweeps a node's edge linked-list; the iterator is a flyweight, mutated in place per <code>next()</code>.</td>
+<td>Một con trỏ quét qua linked-list các edge của một node; iterator là một flyweight, được mutate tại chỗ sau mỗi <code>next()</code>.</td>
 </tr>
 <tr>
 <td><strong><code>EdgeIteratorState</code></strong></td>
-<td>The read view of one edge: <code>getEdge()</code>, <code>getAdjNode()</code>, <code>getDistance()</code>, <code>fetchWayGeometry()</code>.</td>
+<td>View đọc của một edge: <code>getEdge()</code>, <code>getAdjNode()</code>, <code>getDistance()</code>, <code>fetchWayGeometry()</code>.</td>
 </tr>
 <tr>
 <td><strong><code>PointList</code></strong></td>
-<td>An edge's geometry — the polyline of points between its two endpoint nodes.</td>
+<td>Hình học (geometry) của một edge — polyline gồm các điểm nằm giữa hai node endpoint của nó.</td>
 </tr>
 <tr>
 <td><strong><code>DataAccess</code></strong></td>
-<td>The storage abstraction: <code>RAMDataAccess</code> (on-heap <code>byte[][]</code>) or <code>MMapDataAccess</code> (memory-mapped files).</td>
+<td>Lớp abstraction cho storage: <code>RAMDataAccess</code> (<code>byte[][]</code> on-heap) hoặc <code>MMapDataAccess</code> (file memory-mapped).</td>
 </tr>
 <tr>
 <td><strong><code>TurnCostStorage</code></strong></td>
-<td>Stores turn restrictions/costs against a <code>(fromEdge, viaNode, toEdge)</code> triple.</td>
+<td>Lưu các turn restriction/cost theo bộ ba <code>(fromEdge, viaNode, toEdge)</code>.</td>
 </tr>
 <tr>
 <td><strong>frozen graph</strong></td>
-<td>After import, the graph is frozen — no new base edges, only CH shortcuts.</td>
+<td>Sau khi import, graph bị freeze — không thêm base edge mới, chỉ còn các CH shortcut.</td>
 </tr>
 </tbody>
 </table></div>
-<h2 id="algorithms-shortest-path">Algorithms (shortest path)</h2>
+<h2 id="thuat-toan-shortest-path">Thuật toán (shortest path)</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Term</th>
-<th>Meaning</th>
+<th>Nghĩa</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong><code>Weighting</code></strong></td>
-<td>The pluggable per-edge cost function; <code>calcEdgeWeight(edge, reverse)</code> is called (indirectly) by every algorithm.</td>
+<td>Hàm chi phí per-edge có thể cắm thay (pluggable); <code>calcEdgeWeight(edge, reverse)</code> được (gián tiếp) gọi bởi mọi thuật toán.</td>
 </tr>
 <tr>
 <td><strong><code>SPTEntry</code></strong></td>
-<td>A shortest-path-tree node: weight + reaching edge + parent back-pointer; heap-ordered by weight.</td>
+<td>Một node của shortest-path-tree: weight + edge dẫn tới + con trỏ ngược về parent; được sắp trên heap theo weight.</td>
 </tr>
 <tr>
 <td><strong>lazy deletion</strong></td>
-<td>GraphHopper's substitute for decrease-key: mark a stale heap entry deleted, insert a fresh one, skip deleted on poll.</td>
+<td>Cách GraphHopper thay cho decrease-key: đánh dấu một entry cũ trên heap là đã xóa, chèn một entry mới, và bỏ qua các entry đã xóa khi poll.</td>
 </tr>
 <tr>
 <td><strong>Dijkstra</strong></td>
-<td>Uninformed shortest path; settles a growing frontier by weight until it reaches the target.</td>
+<td>Shortest path không có thông tin dẫn hướng; nới rộng dần một frontier theo weight cho tới khi chạm target.</td>
 </tr>
 <tr>
 <td><strong>A*</strong></td>
-<td>Dijkstra + an admissible heuristic <code>h</code>; orders the frontier by <code>f = g + h</code> so it leans toward the goal.</td>
+<td>Dijkstra + một heuristic admissible <code>h</code>; sắp frontier theo <code>f = g + h</code> nên nó nghiêng về phía đích.</td>
 </tr>
 <tr>
 <td><strong>admissible heuristic</strong></td>
-<td>A lower bound that never overestimates remaining cost — required for A* to stay optimal.</td>
+<td>Một chặn dưới không bao giờ ước lượng vượt quá chi phí còn lại — điều kiện để A* vẫn tối ưu.</td>
 </tr>
 <tr>
 <td><strong>beeline approximator</strong></td>
-<td>Default A* heuristic: straight-line distance × cheapest weight-per-metre.</td>
+<td>Heuristic mặc định của A*: khoảng cách đường thẳng × weight-per-metre rẻ nhất.</td>
 </tr>
 <tr>
 <td><strong>bidirectional search</strong></td>
-<td>Two frontiers (from source and target); stops when they can no longer beat the best meeting weight.</td>
+<td>Hai frontier (xuất phát từ source và từ target); dừng khi chúng không còn cải thiện được weight gặp nhau tốt nhất.</td>
 </tr>
 <tr>
 <td><strong>Contraction Hierarchies (CH)</strong></td>
-<td>Preprocess nodes into levels + shortcut edges; the query only traverses upward, skipping local nodes. ~1000× faster, fixed weighting.</td>
+<td>Tiền xử lý các node thành level + shortcut edge; query chỉ đi lên trên, bỏ qua các node cục bộ. Nhanh hơn ~1000×, nhưng cố định weighting.</td>
 </tr>
 <tr>
 <td><strong>shortcut</strong></td>
-<td>An edge added during contraction that preserves a shortest path around a removed node; records the two edges it bridges.</td>
+<td>Một edge được thêm trong lúc contraction để giữ nguyên shortest path đi vòng qua một node đã gỡ; nó ghi lại hai edge mà nó bắc cầu.</td>
 </tr>
 <tr>
 <td><strong>witness search</strong></td>
-<td>The check during contraction that avoids adding a shortcut if a cheaper alternative path already exists.</td>
+<td>Phép kiểm tra trong lúc contraction, tránh thêm một shortcut nếu đã tồn tại một đường thay thế rẻ hơn.</td>
 </tr>
 <tr>
 <td><strong>stall-on-demand</strong></td>
-<td>CH query optimization: abandon a frontier node if a cheaper route to it exists via a higher edge.</td>
+<td>Tối ưu cho CH query: bỏ một node ở frontier nếu tồn tại một đường tới nó rẻ hơn qua một edge cao hơn.</td>
 </tr>
 <tr>
 <td><strong>Landmarks / ALT</strong></td>
-<td>A<em> with a sharp heuristic from precomputed distances to anchor nodes; fast </em>and* flexible (unlike CH).</td>
+<td>A<em> với một heuristic sắc bén dựng từ các khoảng cách tính sẵn tới các anchor node; vừa nhanh </em>vừa* linh hoạt (khác với CH).</td>
 </tr>
 <tr>
 <td><strong>triangle inequality (LM)</strong></td>
-<td><code>d(v,t) ≥ |d(v,L) − d(t,L)|</code> for any landmark <code>L</code> — the ALT lower bound.</td>
+<td><code>d(v,t) ≥ |d(v,L) − d(t,L)|</code> với mọi landmark <code>L</code> — chặn dưới của ALT.</td>
 </tr>
 </tbody>
 </table></div>
-<h2 id="weighting-profiles">Weighting &amp; profiles</h2>
+<h2 id="weighting-profile">Weighting &amp; profile</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Term</th>
-<th>Meaning</th>
+<th>Nghĩa</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong><code>Profile</code></strong></td>
-<td>Config binding a name to a weighting (default <code>custom</code>), turn-cost setting, and a <code>CustomModel</code>.</td>
+<td>Config gắn một cái tên với một weighting (mặc định <code>custom</code>), một thiết lập turn-cost, và một <code>CustomModel</code>.</td>
 </tr>
 <tr>
 <td><strong><code>CustomWeighting</code></strong></td>
-<td>The default weighting: <code>weight = distance/(speed·priority) + distance·distance_influence</code>.</td>
+<td>Weighting mặc định: <code>weight = distance/(speed·priority) + distance·distance_influence</code>.</td>
 </tr>
 <tr>
 <td><strong><code>CustomModel</code></strong></td>
-<td>Config DSL of <code>speed</code> / <code>priority</code> / <code>distance_influence</code> statements evaluated per edge.</td>
+<td>Một DSL cấu hình gồm các câu lệnh <code>speed</code> / <code>priority</code> / <code>distance_influence</code> được đánh giá trên từng edge.</td>
 </tr>
 <tr>
 <td><strong><code>CustomModelParser</code></strong></td>
-<td>Compiles a <code>CustomModel</code> to Java bytecode (Janino) at import time — statements aren't interpreted per edge.</td>
+<td>Biên dịch một <code>CustomModel</code> thành Java bytecode (Janino) lúc import — các câu lệnh không bị thông dịch lại trên từng edge.</td>
 </tr>
 <tr>
 <td><strong><code>ValueExpressionVisitor</code></strong></td>
-<td>The security boundary: whitelists methods (<code>sqrt</code> only) and the encoded values an expression may touch.</td>
+<td>Ranh giới bảo mật: whitelist các method (chỉ <code>sqrt</code>) và các encoded value mà một biểu thức được phép chạm tới.</td>
 </tr>
 <tr>
 <td><strong>encoded value</strong></td>
-<td>A named, fixed-bit-width per-edge attribute (<code>road_class</code>, <code>max_weight</code>, <code>roundabout</code>, access).</td>
+<td>Một thuộc tính per-edge có tên, độ rộng bit cố định (<code>road_class</code>, <code>max_weight</code>, <code>roundabout</code>, access).</td>
 </tr>
 <tr>
 <td><strong><code>EncodingManager</code></strong></td>
-<td>The registry that owns all encoded values and hands out non-overlapping bit slices.</td>
+<td>Registry sở hữu toàn bộ encoded value và cấp phát các lát bit không chồng lấn.</td>
 </tr>
 <tr>
 <td><strong><code>EncodedValue.init</code></strong></td>
-<td>Where a value claims its bits (shift + mask) in the edge record.</td>
+<td>Nơi một value giành lấy các bit của nó (shift + mask) trong bản ghi edge.</td>
 </tr>
 </tbody>
 </table></div>
-<h2 id="public-transit-gtfs-raptor">Public transit (GTFS &amp; RAPTOR)</h2>
+<h2 id="giao-thong-cong-cong-gtfs-raptor">Giao thông công cộng (GTFS &amp; RAPTOR)</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Term</th>
-<th>Meaning</th>
+<th>Nghĩa</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>GTFS</strong></td>
-<td>General Transit Feed Specification — the static feed (stops, trips, stop_times, transfers) GraphHopper imports.</td>
+<td>General Transit Feed Specification — feed tĩnh (stops, trips, stop_times, transfers) mà GraphHopper import vào.</td>
 </tr>
 <tr>
 <td><strong><code>GtfsReader</code></strong></td>
-<td>Builds the transit graph: <code>createTrips()</code> + <code>wireUpStops()</code> + <code>insertGtfsTransfers()</code>.</td>
+<td>Dựng transit graph: <code>createTrips()</code> + <code>wireUpStops()</code> + <code>insertGtfsTransfers()</code>.</td>
 </tr>
 <tr>
 <td><strong><code>PtGraph</code></strong></td>
-<td>The time-expanded transit graph — one node per stop-time <em>event</em>, DataAccess-backed like <code>BaseGraph</code>.</td>
+<td>Transit graph đã time-expand — mỗi <em>event</em> stop-time là một node, được lưu trên DataAccess giống <code>BaseGraph</code>.</td>
 </tr>
 <tr>
 <td><strong>time expansion</strong></td>
-<td>Folding schedule time into the graph so a plain search respects departure times automatically.</td>
+<td>Gấp thời gian biểu vào trong graph để một phép tìm kiếm thường vẫn tự động tôn trọng giờ khởi hành.</td>
 </tr>
 <tr>
 <td><strong><code>EdgeType</code></strong></td>
-<td>The transit edge vocabulary: <code>BOARD</code>, <code>ALIGHT</code>, <code>HOP</code>, <code>DWELL</code>, <code>TRANSFER</code>, <code>WAIT</code>, <code>ENTER_PT</code>, …</td>
+<td>Bộ từ vựng cho transit edge: <code>BOARD</code>, <code>ALIGHT</code>, <code>HOP</code>, <code>DWELL</code>, <code>TRANSFER</code>, <code>WAIT</code>, <code>ENTER_PT</code>, …</td>
 </tr>
 <tr>
 <td><strong><code>Label</code></strong></td>
-<td>A transit search state: arrival time (<code>currentTime</code>), <code>nTransfers</code>, walk time (<code>streetTime</code>), parent.</td>
+<td>Một trạng thái tìm kiếm transit: giờ đến (<code>currentTime</code>), <code>nTransfers</code>, thời gian đi bộ (<code>streetTime</code>), parent.</td>
 </tr>
 <tr>
 <td><strong><code>MultiCriteriaLabelSetting</code></strong></td>
-<td>RAPTOR-style search keeping a Pareto set of non-dominated labels per node.</td>
+<td>Tìm kiếm kiểu RAPTOR, giữ một tập Pareto các label không bị lấn át (non-dominated) trên mỗi node.</td>
 </tr>
 <tr>
 <td><strong>domination</strong></td>
-<td>A label is kept only if no existing label beats it on every criterion; it prunes ones it dominates.</td>
+<td>Một label chỉ được giữ nếu không có label nào hiện có thắng nó trên mọi tiêu chí; nó cũng loại bỏ những label mà nó lấn át.</td>
 </tr>
 <tr>
 <td><strong><code>RealtimeFeed</code></strong></td>
-<td>A GTFS-realtime overlay of blocked edges + per-edge delay maps read by the search (no graph rebuild).</td>
+<td>Một lớp phủ GTFS-realtime gồm các edge bị chặn + các map delay theo từng edge, được phép tìm kiếm đọc vào (không phải build lại graph).</td>
 </tr>
 </tbody>
 </table></div>
@@ -281,37 +281,37 @@ numbers are pinned to this ref — re-verify after re-pinning (Chapter 8).</p>
 <thead>
 <tr>
 <th>Term</th>
-<th>Meaning</th>
+<th>Nghĩa</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>map-matching</strong></td>
-<td>Recovering the road path a vehicle actually took from a noisy GPS trace.</td>
+<td>Khôi phục lại đường đi thực tế của một xe từ một vệt GPS nhiễu.</td>
 </tr>
 <tr>
 <td><strong><code>MapMatching.match</code></strong></td>
-<td>The pipeline: candidate snaps → query graph → trellis → Viterbi → <code>MatchResult</code>.</td>
+<td>Pipeline: candidate snap → query graph → trellis → Viterbi → <code>MatchResult</code>.</td>
 </tr>
 <tr>
 <td><strong>emission probability</strong></td>
-<td>How likely a candidate snap is given the GPS point — a normal distribution on snap distance.</td>
+<td>Mức khả dĩ của một candidate snap khi đã biết điểm GPS — một phân phối normal theo khoảng cách snap.</td>
 </tr>
 <tr>
 <td><strong>transition probability</strong></td>
-<td>How plausible the move between two candidates is — exponential penalty on <code>|route − straight-line|</code> (Newson &amp; Krumm).</td>
+<td>Mức hợp lý của bước chuyển giữa hai candidate — phạt theo hàm exponential trên <code>|route − straight-line|</code> (Newson &amp; Krumm).</td>
 </tr>
 <tr>
 <td><strong><code>HmmProbabilities</code></strong></td>
-<td>Holds the emission (normal) and transition (exponential) log-probability functions.</td>
+<td>Giữ các hàm log-probability cho emission (normal) và transition (exponential).</td>
 </tr>
 <tr>
 <td><strong>Viterbi</strong></td>
-<td>The decode that picks the single most probable candidate sequence; here, an inlined PQ label-setting.</td>
+<td>Bước decode chọn ra chuỗi candidate khả dĩ nhất; ở đây là một label-setting bằng PQ được inline vào.</td>
 </tr>
 <tr>
 <td><strong><code>MatchResult</code></strong></td>
-<td>The output: matched edges, matched length (real distance driven), merged path.</td>
+<td>Kết quả đầu ra: các edge đã match, chiều dài đã match (quãng đường thực đã đi), và path đã gộp.</td>
 </tr>
 </tbody>
 </table></div>
@@ -320,47 +320,47 @@ numbers are pinned to this ref — re-verify after re-pinning (Chapter 8).</p>
 <thead>
 <tr>
 <th>Term</th>
-<th>Meaning</th>
+<th>Nghĩa</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong><code>GHRequest</code> / <code>GHResponse</code></strong></td>
-<td>The request (points + profile) and response (best path + alternatives + errors) value objects in <code>web-api</code>.</td>
+<td>Các value object request (points + profile) và response (best path + alternative + error) trong <code>web-api</code>.</td>
 </tr>
 <tr>
 <td><strong><code>Router</code></strong></td>
-<td>Built per request; validates, then dispatches to a CH / LM / flexible solver.</td>
+<td>Được dựng cho mỗi request; validate, rồi dispatch tới một solver CH / LM / flexible.</td>
 </tr>
 <tr>
 <td><strong><code>ResponsePath</code></strong></td>
-<td>One route: distance, time, geometry (<code>PointList</code>), <code>InstructionList</code>, <code>PathDetail</code>s.</td>
+<td>Một tuyến đường: distance, time, geometry (<code>PointList</code>), <code>InstructionList</code>, và các <code>PathDetail</code>.</td>
 </tr>
 <tr>
 <td><strong><code>InstructionsFromEdges</code></strong></td>
-<td>Turns a path's edges into turn-by-turn <code>Instruction</code>s with sign codes.</td>
+<td>Biến các edge của một path thành các <code>Instruction</code> chỉ đường từng chặng, kèm sign code.</td>
 </tr>
 <tr>
 <td><strong>sign code</strong></td>
-<td>Integer turn code: <code>CONTINUE=0</code>, <code>TURN_LEFT=-2</code>, <code>TURN_RIGHT=2</code>, <code>FINISH=4</code>, <code>USE_ROUNDABOUT=6</code>, <code>PT_*=101+</code>.</td>
+<td>Mã rẽ dạng integer: <code>CONTINUE=0</code>, <code>TURN_LEFT=-2</code>, <code>TURN_RIGHT=2</code>, <code>FINISH=4</code>, <code>USE_ROUNDABOUT=6</code>, <code>PT_*=101+</code>.</td>
 </tr>
 <tr>
 <td><strong><code>PathDetail</code></strong></td>
-<td>An interval-tagged value along a route (e.g. <code>road_class</code> over edges 6–9).</td>
+<td>Một value gắn theo khoảng dọc tuyến đường (ví dụ <code>road_class</code> trên các edge 6–9).</td>
 </tr>
 <tr>
 <td><strong><code>/route</code> <code>/isochrone</code> <code>/nearest</code> <code>/mvt</code> <code>/spt</code></strong></td>
-<td>The HTTP endpoints — projections of the same graph + shortest-path machinery.</td>
+<td>Các HTTP endpoint — những phép chiếu của cùng một bộ máy graph + shortest-path.</td>
 </tr>
 <tr>
 <td><strong>isochrone</strong></td>
-<td>Everywhere reachable within a time/distance limit — a shortest-path <em>tree</em>, contoured to a polygon.</td>
+<td>Toàn bộ những nơi có thể tới trong một giới hạn time/distance — một <em>cây</em> shortest-path, được vẽ đường viền thành polygon.</td>
 </tr>
 </tbody>
 </table></div>
 <hr />
-<h2 id="key-files-the-source-index">Key files — the source index</h2>
-<p>The symbols this book is built on. After re-pinning (Chapter 8), re-verify these first.</p>
+<h2 id="key-files-chi-muc-source">Key files — chỉ mục source</h2>
+<p>Các symbol mà cuốn sách này dựng trên. Sau khi re-pin (Chương 8), hãy re-verify những cái này trước.</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -584,24 +584,24 @@ numbers are pinned to this ref — re-verify after re-pinning (Chapter 8).</p>
 </tbody>
 </table></div>
 <p><em>A RumitX publication · <a href="https://rumitx.com">rumitx.com</a></em></p>
-    <nav class="pager"><a class="prev" href="08-capstone-and-staying-current.html"><span class="lbl">← Previous</span><span class="ttl">Capstone &amp; Staying Current</span></a><span class="placeholder"></span></nav>
+    <nav class="pager"><a class="prev" href="08-capstone-and-staying-current.html"><span class="lbl">← Trước</span><span class="ttl">Capstone &amp; Staying Current</span></a><span class="placeholder"></span></nav>
   </article></main>
-  <aside class="toc"><nav><h4>On this page</h4>
-<a class="lvl-2" href="#graph-storage">Graph &amp; storage</a>
-<a class="lvl-2" href="#algorithms-shortest-path">Algorithms (shortest path)</a>
-<a class="lvl-2" href="#weighting-profiles">Weighting &amp; profiles</a>
-<a class="lvl-2" href="#public-transit-gtfs-raptor">Public transit (GTFS &amp; RAPTOR)</a>
+  <aside class="toc"><nav><h4>Trong trang này</h4>
+<a class="lvl-2" href="#graph-luu-tru">Graph &amp; lưu trữ</a>
+<a class="lvl-2" href="#thuat-toan-shortest-path">Thuật toán (shortest path)</a>
+<a class="lvl-2" href="#weighting-profile">Weighting &amp; profile</a>
+<a class="lvl-2" href="#giao-thong-cong-cong-gtfs-raptor">Giao thông công cộng (GTFS &amp; RAPTOR)</a>
 <a class="lvl-2" href="#map-matching">Map-matching</a>
 <a class="lvl-2" href="#web-api">Web / API</a>
-<a class="lvl-2" href="#key-files-the-source-index">Key files — the source index</a>
+<a class="lvl-2" href="#key-files-chi-muc-source">Key files — chỉ mục source</a>
 </nav></aside>
 </div>
 <footer class="site-foot">
   <a class="foot-brand" href="https://rumitx.com" target="_blank" rel="noopener"><span class="foot-x">X</span> RumitX</a>
-  GraphHopper Internals Handbook · grounded in <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
-  @ <code>11.0</code> · maps &amp; route-finding, from the source<br>
-  A <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> publication · maps, routing &amp; human-centric mobility
+  GraphHopper Internals Handbook · neo vào <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
+  @ <code>11.0</code> · maps &amp; route-finding, đọc từ source<br>
+  Một ấn phẩm của <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> · maps, routing &amp; human-centric mobility
 </footer>
-<script src="assets/app.js"></script>
+<script src="../assets/app.js"></script>
 </body>
 </html>

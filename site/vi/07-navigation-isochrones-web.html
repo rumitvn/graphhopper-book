@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="vi" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chapter 07 — Navigation, Isochrones &amp; the Web/Tiles Surface · GraphHopper Internals Handbook · RumitX</title>
-<meta name="description" content="A from-the-source handbook on graphhopper/graphhopper: the graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, and the routing web API.">
-<link rel="icon" type="image/svg+xml" href="assets/brand/logo_x.svg">
+<meta name="description" content="Cuốn sách đọc thẳng từ source về graphhopper/graphhopper: graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, và routing web API.">
+<link rel="icon" type="image/svg+xml" href="../assets/brand/logo_x.svg">
 <meta name="author" content="RumitX">
 <meta name="theme-color" content="#0B1E2D">
-<link rel="alternate" hreflang="en" href="07-navigation-isochrones-web.html">
-<link rel="alternate" hreflang="vi" href="vi/07-navigation-isochrones-web.html">
-<link rel="alternate" hreflang="x-default" href="07-navigation-isochrones-web.html">
-<link rel="stylesheet" href="assets/styles.css">
-<link rel="stylesheet" href="assets/code.css">
+<link rel="alternate" hreflang="en" href="../07-navigation-isochrones-web.html">
+<link rel="alternate" hreflang="vi" href="07-navigation-isochrones-web.html">
+<link rel="alternate" hreflang="x-default" href="../07-navigation-isochrones-web.html">
+<link rel="stylesheet" href="../assets/styles.css">
+<link rel="stylesheet" href="../assets/code.css">
 <style>
 .lang-switch{display:inline-flex;align-items:center;gap:.1rem;padding:.15rem;
   border:1px solid var(--border);border-radius:999px;background:var(--surface);
@@ -31,14 +31,14 @@
   <a class="brand" href="index.html"><span class="mark"><span>X</span></span> GraphHopper Internals Handbook</a>
   <span class="spacer"></span>
   <span class="meta-pill">pinned&nbsp;11.0</span>
-  <div class="lang-switch"><span aria-current="true">EN</span><a href="vi/07-navigation-isochrones-web.html" hreflang="vi">VI</a></div>
+  <div class="lang-switch"><a href="../07-navigation-isochrones-web.html" hreflang="en">EN</a><span aria-current="true">VI</span></div>
   <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
 </header>
 <div class="backdrop"></div>
 <div class="shell">
   <aside class="rail"><nav>
-<a class="brand-mini" href="index.html"><img src="assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
-<h4>Chapters</h4>
+<a class="brand-mini" href="index.html"><img src="../assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
+<h4>Chương</h4>
 <a class="" href="00-environment-and-java-refresher.html"><span class="num">00</span><span>Environment &amp; Java Refresher</span></a>
 <a class="" href="01-mental-model-and-the-repo-map.html"><span class="num">01</span><span>Mental Model &amp; the Repo Map</span></a>
 <a class="" href="02-the-graph-map-to-network.html"><span class="num">02</span><span>The Graph — turning a map into a routable network</span></a>
@@ -48,28 +48,28 @@
 <a class="" href="06-map-matching.html"><span class="num">06</span><span>Map-Matching — snapping GPS to roads</span></a>
 <a class="active" href="07-navigation-isochrones-web.html"><span class="num">07</span><span>Navigation, Isochrones &amp; the Web/Tiles Surface</span></a>
 <a class="" href="08-capstone-and-staying-current.html"><span class="num">08</span><span>Capstone &amp; Staying Current</span></a>
-<h4>Reference</h4>
+<h4>Tham khảo</h4>
 <a class="" href="glossary.html"><span class="num">§</span><span>Glossary &amp; Index</span></a>
 <a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener"><span class="num">↗</span><span>GitHub repo</span></a>
 </nav></aside>
   <main class="content"><article class="article">
-    <div class="crumbs"><a href="index.html">Handbook</a> / Chapter 07</div>
+    <div class="crumbs"><a href="index.html">Handbook</a> / Chương 07</div>
     <h1 id="chapter-07-navigation-isochrones-the-webtiles-surface">Chapter 07 — Navigation, Isochrones &amp; the Web/Tiles Surface</h1>
 <div class="callout goal">
-<p><strong>Goal:</strong> See how the engine reaches the app. After this chapter you can explain how
-<code>InstructionsFromEdges</code> turns a raw edge sequence into turn-by-turn <code>Instruction</code>s (with sign codes), how
-the <code>ResponsePath</code> + <code>PathDetail</code> value objects carry a route to a client, and what the family of HTTP
-endpoints — <code>/route</code>, <code>/isochrone</code>, <code>/nearest</code>, <code>/mvt</code> — each does. Pinned to <strong><code>11.0</code></strong> (<code>69e50f6</code>).</p>
+<p><strong>Goal:</strong> Thấy engine vươn tới được app bằng cách nào. Sau chương này bạn giải thích được
+<code>InstructionsFromEdges</code> biến một chuỗi edge thô thành các <code>Instruction</code> turn-by-turn (kèm sign code) ra
+sao, cặp value object <code>ResponsePath</code> + <code>PathDetail</code> mang một route tới client thế nào, và mỗi endpoint
+trong họ HTTP endpoint — <code>/route</code>, <code>/isochrone</code>, <code>/nearest</code>, <code>/mvt</code> — làm gì. Pinned tới <strong><code>11.0</code></strong> (<code>69e50f6</code>).</p>
 </div>
-<h2 id="71-why-it-matters">7.1 Why it matters</h2>
-<p>Chapters 3–6 produced <em>paths</em> — sequences of edges with a total distance and time. But a driver doesn't
-want an edge list; they want "In 200 m, turn left onto Hauptstraße." A dispatch system doesn't want a
-polyline; it wants a JSON envelope with a distance, a duration, and maybe the road classes along the way. A
-map UI wants vector tiles it can render. This chapter is the <strong>shape</strong> layer from Chapter 1 — the last
-transformation from "the algorithm's answer" to "what the product consumes."</p>
-<p>For you this is the surface your apps already talk to. Everything here is the other side of the HTTP calls
-BusMap, VinBus, and a ride-hailing backend make every day.</p>
-<h2 id="72-mental-model-from-edges-to-a-rendered-answer">7.2 Mental model: from edges to a rendered answer</h2>
+<h2 id="71-vi-sao-quan-trong">7.1 Vì sao quan trọng</h2>
+<p>Các Chương 3–6 đã sản xuất ra <em>path</em> — những chuỗi edge kèm tổng distance và time. Nhưng tài xế đâu cần một
+danh sách edge; họ cần "Còn 200 m nữa, rẽ trái vào Hauptstraße." Một hệ dispatch không cần một polyline; nó
+cần một JSON envelope gồm distance, duration, và có thể là các road class dọc đường. Một map UI thì cần
+vector tile để render. Chương này chính là tầng <strong>shape</strong> từ Chương 1 — bước biến đổi cuối cùng, từ "đáp án
+của thuật toán" thành "thứ mà sản phẩm tiêu thụ."</p>
+<p>Với bạn, đây chính là bề mặt mà các app của bạn vốn đã nói chuyện cùng. Mọi thứ ở đây là phía bên kia của
+những HTTP call mà BusMap, VinBus, và một backend gọi xe thực hiện mỗi ngày.</p>
+<h2 id="72-mental-model-tu-edges-toi-mot-cau-tra-loi-a-render">7.2 Mental model: từ edges tới một câu trả lời đã render</h2>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">text</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code>   Path (edge ids + geometry)                    HTTP endpoints (web-bundle)
         │                                         ┌──────────────────────────────┐
         ▼  InstructionsFromEdges (core)           │ /route      → ResponsePath    │
@@ -84,12 +84,12 @@ BusMap, VinBus, and a ride-hailing backend make every day.</p>
         ▼  GHResponse.getBest() → serialized to JSON → your app
 </code></pre></div></figure>
 
-<p>Two objects do most of the work: <code>InstructionList</code> (the turn-by-turn steps) and <code>ResponsePath</code> (the whole
-answer). The endpoints are thin wrappers that call the engine and serialize one of these.</p>
-<h2 id="73-turn-instructions-from-edges">7.3 Turn instructions from edges</h2>
-<p>Turning a path into instructions means walking its edges and, at each junction, deciding "did the road bend
-enough, or the name change, to warrant telling the driver something?" That's <code>InstructionsFromEdges</code>, an
-edge visitor:</p>
+<p>Hai object gánh phần lớn công việc: <code>InstructionList</code> (các bước turn-by-turn) và <code>ResponsePath</code> (trọn câu
+trả lời). Các endpoint chỉ là những lớp bọc mỏng: gọi engine rồi serialize một trong hai object này.</p>
+<h2 id="73-turn-instruction-tu-edges">7.3 Turn instruction từ edges</h2>
+<p>Biến một path thành instruction nghĩa là đi dọc từng edge của nó và, tại mỗi junction, quyết định "con đường
+có bẻ góc đủ nhiều, hay tên đường có đổi, để đáng phải báo cho tài xế điều gì đó không?" Đó là việc của
+<code>InstructionsFromEdges</code>, một edge visitor:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">InstructionsFromEdges</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">Path</span><span class="p">.</span><span class="na">EdgeVisitor</span><span class="w"> </span><span class="p">{</span><span class="w">              </span><span class="c1">// :36</span>
 <span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">InstructionList</span><span class="w"> </span><span class="nf">calcInstructions</span><span class="p">(</span><span class="n">Path</span><span class="w"> </span><span class="n">path</span><span class="p">,</span><span class="w"> </span><span class="n">Graph</span><span class="w"> </span><span class="n">graph</span><span class="p">,</span><span class="w"> </span><span class="n">Weighting</span><span class="w"> </span><span class="n">weighting</span><span class="p">,</span>
 <span class="w">                                                   </span><span class="n">EncodedValueLookup</span><span class="w"> </span><span class="n">evLookup</span><span class="p">,</span><span class="w"> </span><span class="n">Translation</span><span class="w"> </span><span class="n">tr</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">  </span><span class="c1">// :111</span>
@@ -98,16 +98,16 @@ edge visitor:</p>
 <span class="w">        </span><span class="n">ways</span><span class="p">.</span><span class="na">add</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">FinishInstruction</span><span class="p">(</span><span class="n">graph</span><span class="p">.</span><span class="na">getNodeAccess</span><span class="p">(),</span><span class="w"> </span><span class="n">path</span><span class="p">.</span><span class="na">getEndNode</span><span class="p">()));</span><span class="w">   </span><span class="c1">// :115</span>
 </code></pre></div></figure>
 
-<p>📌 <code>core/src/main/java/com/graphhopper/routing/InstructionsFromEdges.java:36</code>,<code>:111</code>–<code>:118</code>. The first step
-is always a <code>CONTINUE_ON_STREET</code>; each subsequent junction gets a <strong>sign</strong> computed from the geometry:</p>
+<p>📌 <code>core/src/main/java/com/graphhopper/routing/InstructionsFromEdges.java:36</code>,<code>:111</code>–<code>:118</code>. Bước đầu tiên
+luôn là một <code>CONTINUE_ON_STREET</code>; mỗi junction tiếp theo nhận một <strong>sign</strong> được tính từ geometry:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kt">int</span><span class="w"> </span><span class="n">sign</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Instruction</span><span class="p">.</span><span class="na">CONTINUE_ON_STREET</span><span class="p">;</span><span class="w">                                    </span><span class="c1">// :160  (first instruction)</span>
 <span class="c1">// ...at each junction:</span>
 <span class="kt">int</span><span class="w"> </span><span class="n">sign</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getTurn</span><span class="p">(</span><span class="n">edge</span><span class="p">,</span><span class="w"> </span><span class="n">baseNode</span><span class="p">,</span><span class="w"> </span><span class="n">prevNode</span><span class="p">,</span><span class="w"> </span><span class="n">adjNode</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="p">...);</span><span class="w">             </span><span class="c1">// :257</span>
 <span class="c1">// getTurn → InstructionsHelper.calculateSign(prevLat, prevLon, lat, lon, prevOrientation)  // :362</span>
 </code></pre></div></figure>
 
-<p>📌 <code>InstructionsFromEdges.java:158</code>–<code>:161</code>,<code>:256</code>–<code>:257</code>,<code>:355</code>–<code>:362</code>. The sign is an integer code the
-client renders as an arrow:</p>
+<p>📌 <code>InstructionsFromEdges.java:158</code>–<code>:161</code>,<code>:256</code>–<code>:257</code>,<code>:355</code>–<code>:362</code>. Cái sign là một mã integer mà client
+render thành một mũi tên:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">TURN_LEFT</span><span class="w">        </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">2</span><span class="p">;</span><span class="w">   </span><span class="c1">// :32</span>
 <span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">CONTINUE_ON_STREET</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w">  </span><span class="c1">// :34</span>
 <span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">TURN_RIGHT</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">    </span><span class="c1">// :36</span>
@@ -116,11 +116,11 @@ client renders as an arrow:</p>
 <span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">PT_START_TRIP</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="mi">101</span><span class="p">;</span><span class="w">  </span><span class="c1">// :47  (transit instructions, Chapter 5)</span>
 </code></pre></div></figure>
 
-<p>📌 <code>web-api/src/main/java/com/graphhopper/util/Instruction.java:28</code>–<code>:47</code>. Sharper angles get bigger
-magnitudes (<code>SHARP_LEFT</code>/<code>SHARP_RIGHT</code>), and the sign's <em>sign</em> is its handedness — negative left, positive
-right. Note the <code>PT_*</code> codes: transit journeys (Chapter 5) reuse this same instruction machinery.</p>
-<h2 id="74-the-response-model">7.4 The response model</h2>
-<p>A route leaves the engine as a <code>ResponsePath</code>:</p>
+<p>📌 <code>web-api/src/main/java/com/graphhopper/util/Instruction.java:28</code>–<code>:47</code>. Góc càng gắt thì magnitude càng
+lớn (<code>SHARP_LEFT</code>/<code>SHARP_RIGHT</code>), và <em>dấu</em> của sign chính là hướng tay — âm là trái, dương là phải. Để ý các
+mã <code>PT_*</code>: các hành trình transit (Chương 5) tái dùng đúng bộ máy instruction này.</p>
+<h2 id="74-response-model">7.4 Response model</h2>
+<p>Một route rời khỏi engine dưới dạng một <code>ResponsePath</code>:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">ResponsePath</span><span class="w"> </span><span class="p">{</span><span class="w">                                   </span><span class="c1">// :34</span>
 <span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">InstructionList</span><span class="w"> </span><span class="n">instructions</span><span class="p">;</span><span class="w">                     </span><span class="c1">// :43</span>
 <span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">PathDetail</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">pathDetails</span><span class="p">;</span><span class="w">        </span><span class="c1">// :50</span>
@@ -130,25 +130,25 @@ right. Note the <code>PT_*</code> codes: transit journeys (Chapter 5) reuse this
 <span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">InstructionList</span><span class="w"> </span><span class="nf">getInstructions</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span><span class="w">          </span><span class="c1">// :246</span>
 </code></pre></div></figure>
 
-<p>📌 <code>web-api/src/main/java/com/graphhopper/ResponsePath.java:34</code>–<code>:246</code>. Beyond distance/time/geometry/turns
-it carries <strong>path details</strong> — interval-tagged values along the route ("edges 0–5 are <code>road_class=primary</code>,
-6–9 are <code>residential</code>"):</p>
+<p>📌 <code>web-api/src/main/java/com/graphhopper/ResponsePath.java:34</code>–<code>:246</code>. Ngoài distance/time/geometry/turn,
+nó còn mang theo <strong>path detail</strong> — những giá trị được gắn nhãn theo từng khoảng dọc route ("edge 0–5 là
+<code>road_class=primary</code>, 6–9 là <code>residential</code>"):</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">PathDetail</span><span class="w"> </span><span class="p">{</span><span class="w">                 </span><span class="c1">// :25</span>
 <span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">Object</span><span class="w"> </span><span class="n">value</span><span class="p">;</span><span class="w">           </span><span class="c1">// :26   e.g. &quot;primary&quot;, or a speed</span>
 <span class="w">    </span><span class="c1">// first / last point index the value spans</span>
 <span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">Object</span><span class="w"> </span><span class="nf">getValue</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span><span class="w">      </span><span class="c1">// :37</span>
 </code></pre></div></figure>
 
-<p>📌 <code>web-api/src/main/java/com/graphhopper/util/details/PathDetail.java:25</code>–<code>:37</code>. The whole thing is wrapped
-in a <code>GHResponse</code> (best path + alternatives + errors), whose <code>getBest()</code> (<code>GHResponse.java:48</code>, seen back in
-§1.4) the resource serializes.</p>
-<h2 id="75-the-endpoint-family">7.5 The endpoint family</h2>
-<p>Each capability is a JAX-RS resource in <code>web-bundle</code>. <code>/route</code> you already traced (§1.4):</p>
+<p>📌 <code>web-api/src/main/java/com/graphhopper/util/details/PathDetail.java:25</code>–<code>:37</code>. Toàn bộ được bọc trong một
+<code>GHResponse</code> (best path + alternatives + errors), và chính <code>getBest()</code> của nó (<code>GHResponse.java:48</code>, đã gặp
+ở §1.4) là thứ mà resource serialize.</p>
+<h2 id="75-ho-endpoint">7.5 Họ endpoint</h2>
+<p>Mỗi capability là một JAX-RS resource trong <code>web-bundle</code>. <code>/route</code> thì bạn đã trace rồi (§1.4):</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nd">@Path</span><span class="p">(</span><span class="s">&quot;route&quot;</span><span class="p">)</span><span class="w">   </span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">RouteResource</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="n">GHResponse</span><span class="w"> </span><span class="n">ghResponse</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">graphHopper</span><span class="p">.</span><span class="na">route</span><span class="p">(</span><span class="n">request</span><span class="p">);</span><span class="w"> </span><span class="c1">// :154 }</span>
 </code></pre></div></figure>
 
-<p><strong><code>/isochrone</code></strong> — "everywhere reachable within N seconds/metres" — grows a shortest-path <em>tree</em> (not a
-single path) and contours it into a polygon:</p>
+<p><strong><code>/isochrone</code></strong> — "mọi nơi tới được trong N giây/mét" — mọc lên một <em>cây</em> shortest-path (không phải một
+path đơn) rồi contour nó thành một polygon:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nd">@Path</span><span class="p">(</span><span class="s">&quot;isochrone&quot;</span><span class="p">)</span>
 <span class="c1">// ...</span>
 <span class="n">ShortestPathTree</span><span class="w"> </span><span class="n">shortestPathTree</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">ShortestPathTree</span><span class="p">(</span><span class="n">queryGraph</span><span class="p">,</span><span class="w"> </span><span class="p">...,</span><span class="w"> </span><span class="n">reverseFlow</span><span class="p">,</span><span class="w"> </span><span class="n">traversalMode</span><span class="p">);</span><span class="w">  </span><span class="c1">// :105</span>
@@ -156,32 +156,32 @@ single path) and contours it into a polygon:</p>
 <span class="n">Triangulator</span><span class="p">.</span><span class="na">Result</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">triangulator</span><span class="p">.</span><span class="na">triangulate</span><span class="p">(</span><span class="n">snap</span><span class="p">,</span><span class="w"> </span><span class="n">queryGraph</span><span class="p">,</span><span class="w"> </span><span class="n">shortestPathTree</span><span class="p">,</span><span class="w"> </span><span class="n">fz</span><span class="p">,</span><span class="w"> </span><span class="p">...);</span><span class="w">     </span><span class="c1">// :127</span>
 </code></pre></div></figure>
 
-<p>📌 <code>web-bundle/src/main/java/com/graphhopper/resources/IsochroneResource.java:46</code>–<code>:128</code> (the
-weight/distance/time limit dispatch is at <code>:109</code>–<code>:122</code>).</p>
-<p><strong><code>/nearest</code></strong> — snap a coordinate to the graph — is a single location-index lookup:</p>
+<p>📌 <code>web-bundle/src/main/java/com/graphhopper/resources/IsochroneResource.java:46</code>–<code>:128</code> (đoạn dispatch giới
+hạn weight/distance/time nằm ở <code>:109</code>–<code>:122</code>).</p>
+<p><strong><code>/nearest</code></strong> — snap một toạ độ về graph — chỉ là một lần tra location-index:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nd">@Path</span><span class="p">(</span><span class="s">&quot;nearest&quot;</span><span class="p">)</span>
 <span class="n">Snap</span><span class="w"> </span><span class="n">snap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">index</span><span class="p">.</span><span class="na">findClosest</span><span class="p">(</span><span class="n">point</span><span class="p">.</span><span class="na">lat</span><span class="p">,</span><span class="w"> </span><span class="n">point</span><span class="p">.</span><span class="na">lon</span><span class="p">,</span><span class="w"> </span><span class="n">EdgeFilter</span><span class="p">.</span><span class="na">ALL_EDGES</span><span class="p">);</span><span class="w">   </span><span class="c1">// :70</span>
 </code></pre></div></figure>
 
-<p>📌 <code>NearestResource.java:42</code>–<code>:70</code>. <strong><code>/mvt/{z}/{x}/{y}.mvt</code></strong> serves Mapbox <strong>vector tiles</strong> so a client can
-draw the routable network:</p>
+<p>📌 <code>NearestResource.java:42</code>–<code>:70</code>. <strong><code>/mvt/{z}/{x}/{y}.mvt</code></strong> phục vụ <strong>vector tile</strong> kiểu Mapbox để client
+vẽ được mạng lưới routable:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nd">@Path</span><span class="p">(</span><span class="s">&quot;mvt&quot;</span><span class="p">)</span>
 <span class="nd">@GET</span><span class="w"> </span><span class="nd">@Path</span><span class="p">(</span><span class="s">&quot;{z}/{x}/{y}.mvt&quot;</span><span class="p">)</span>
 <span class="kd">public</span><span class="w"> </span><span class="n">Response</span><span class="w"> </span><span class="nf">doGetXyz</span><span class="p">(</span><span class="nd">@PathParam</span><span class="p">(</span><span class="s">&quot;z&quot;</span><span class="p">)</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">zInfo</span><span class="p">,</span><span class="w"> </span><span class="nd">@PathParam</span><span class="p">(</span><span class="s">&quot;x&quot;</span><span class="p">)</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">xInfo</span><span class="p">,</span><span class="w"> </span><span class="nd">@PathParam</span><span class="p">(</span><span class="s">&quot;y&quot;</span><span class="p">)</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">yInfo</span><span class="p">,</span><span class="w"> </span><span class="p">...)</span>
 <span class="c1">// ...uses a VectorTileEncoder                                                // :93</span>
 </code></pre></div></figure>
 
-<p>📌 <code>MVTResource.java:34</code>–<code>:93</code>. (There's also an <code>/spt</code> shortest-path-tree endpoint and PT-specific
-resources for transit isochrones and tiles.)</p>
+<p>📌 <code>MVTResource.java:34</code>–<code>:93</code>. (Còn có một endpoint <code>/spt</code> cho shortest-path-tree và các resource riêng cho
+PT phục vụ isochrone và tile của transit.)</p>
 <div class="callout note"><span class="ic">🧠</span>
-<p> <strong>Mental model:</strong> the endpoints are all the <em>same</em> engine viewed through different lenses. <code>/route</code> is
-one path; <code>/isochrone</code> is the whole reachable set (a tree, not a path); <code>/nearest</code> is just the snap step;
-<code>/mvt</code> is the graph itself, drawn. Once you see them as projections of the graph + the shortest-path
-machinery, there are no new concepts here — only new outputs.</p>
+<p> <strong>Mental model:</strong> tất cả các endpoint đều là <em>cùng một</em> engine nhìn qua những lăng kính khác nhau.
+<code>/route</code> là một path; <code>/isochrone</code> là toàn bộ tập điểm tới được (một cây, không phải một path); <code>/nearest</code>
+chỉ là bước snap; <code>/mvt</code> là chính cái graph, được vẽ ra. Một khi bạn thấy chúng đều là hình chiếu của
+graph + bộ máy shortest-path, thì ở đây chẳng có khái niệm nào mới — chỉ có output mới.</p>
 </div>
-<h2 id="76-lab-7-hit-the-surface">7.6 Lab 7 — hit the surface</h2>
+<h2 id="76-lab-7-cham-vao-be-mat">7.6 Lab 7 — chạm vào bề mặt</h2>
 <div class="callout lab"><span class="ic">🧪</span>
-<p> <strong>Lab 7.</strong> Server lab. Goal: exercise the endpoint family and read the response model. Record in
+<p> <strong>Lab 7.</strong> Lab server. Mục tiêu: luyện chạy cả họ endpoint và đọc response model. Ghi lại vào
 <a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab07-web.md"><code>labs/lab07-web.md</code></a>.</p>
 </div>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/Documents/learning/graphhopper
@@ -195,52 +195,53 @@ python3<span class="w"> </span>~/Documents/learning/graphhopper-book/labs/query_
 curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:8989/nearest?point=52.517,13.389&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-c<span class="w"> </span><span class="m">200</span>
 </code></pre></div></figure>
 
-<p><strong>Expected:</strong> <code>Instruction.java:34</code> is <code>CONTINUE_ON_STREET = 0</code>, <code>:32</code> is <code>TURN_LEFT = -2</code>;
-<code>IsochroneResource.java:105</code> builds a <code>ShortestPathTree</code>; <code>query.py</code> prints the route with a handful of
-instruction lines and their sign codes, then an isochrone polygon vertex count; <code>/nearest</code> returns a snapped
-coordinate and its distance. Record which sign codes appeared on your route.</p>
+<p><strong>Kết quả kỳ vọng:</strong> <code>Instruction.java:34</code> là <code>CONTINUE_ON_STREET = 0</code>, <code>:32</code> là <code>TURN_LEFT = -2</code>;
+<code>IsochroneResource.java:105</code> dựng một <code>ShortestPathTree</code>; <code>query.py</code> in ra route kèm dăm dòng instruction và
+mã sign của chúng, rồi tới số đỉnh của polygon isochrone; <code>/nearest</code> trả về một toạ độ đã snap và distance
+của nó. Ghi lại những mã sign nào đã xuất hiện trên route của bạn.</p>
 <h2 id="77-checkpoint">7.7 Checkpoint</h2>
 <ol>
-<li>A path is an edge list; a driver needs instructions. What decides that a junction deserves an
-   instruction, and what integer encodes "turn left" vs "turn right"?</li>
-<li>What does <code>ResponsePath</code> carry beyond distance and time, and what is a <code>PathDetail</code>?</li>
-<li><code>/isochrone</code> and <code>/route</code> use the same engine but return different shapes. What's the structural
-   difference (path vs …)?</li>
-<li>Transit journeys (Chapter 5) reuse the instruction system. What in <code>Instruction</code> proves it?</li>
-<li>Trace one sentence: from <code>GHResponse.getBest()</code> to the JSON your app parses — who does the serializing?</li>
+<li>Một path là một danh sách edge; tài xế thì cần instruction. Cái gì quyết định một junction xứng đáng có
+   một instruction, và integer nào mã hoá "turn left" so với "turn right"?</li>
+<li><code>ResponsePath</code> mang theo những gì ngoài distance và time, và một <code>PathDetail</code> là gì?</li>
+<li><code>/isochrone</code> và <code>/route</code> dùng cùng một engine nhưng trả về những shape khác nhau. Khác biệt về mặt cấu
+   trúc là gì (path so với …)?</li>
+<li>Các hành trình transit (Chương 5) tái dùng hệ instruction. Cái gì trong <code>Instruction</code> chứng minh điều đó?</li>
+<li>Trace trong một câu: từ <code>GHResponse.getBest()</code> tới JSON mà app của bạn parse — ai là người serialize?</li>
 </ol>
 <div class="callout note">
-<p>If #1 is shaky, re-read §7.3. If #3 is shaky, re-read §7.5.</p>
+<p>Nếu #1 còn lung lay, đọc lại §7.3. Nếu #3 còn lung lay, đọc lại §7.5.</p>
 </div>
 <h2 class="connect" id="connect-to-your-past-the-on-screen-map-and-the-eta">🔌 Connect to your past (the on-screen map and the ETA)</h2>
-<p>This chapter is everything your UI touches. The turn arrows and "300 m, then left" banner in a navigation
-screen are <code>InstructionList</code> + sign codes rendered. The ETA VinBus shows is <code>ResponsePath.getTime()</code>. The
-"which roads am I on" a trip-detail screen colors is <code>PathDetail</code>. The reachable-area overlay a
-service-coverage or "cars near you" feature draws is <code>/isochrone</code>. The base map itself can come from <code>/mvt</code>.
-Everything the algorithms computed in Chapters 3–6 only becomes a <em>product</em> here — and now you can read the
-exact object your app deserializes and the exact endpoint it called to get it.</p>
-<p><strong>Next:</strong> you've read the whole engine. The last chapter makes you self-sufficient — a capstone, reading a
-real PR unaided, and re-syncing this book when you re-pin.
+<p>Chương này là tất cả những gì UI của bạn chạm vào. Mấy mũi tên turn và cái banner "300 m nữa, rồi rẽ trái"
+trên một màn hình navigation chính là <code>InstructionList</code> + sign code được render ra. Cái ETA mà VinBus hiển
+thị là <code>ResponsePath.getTime()</code>. Cái "mình đang đi trên những con đường nào" mà một màn trip-detail tô màu
+chính là <code>PathDetail</code>. Lớp overlay vùng-tới-được mà một tính năng service-coverage hay "xe gần bạn" vẽ ra
+chính là <code>/isochrone</code>. Bản thân base map có thể đến từ <code>/mvt</code>. Mọi thứ các thuật toán đã tính ở Chương 3–6
+chỉ thực sự trở thành <em>sản phẩm</em> tại đây — và giờ thì bạn đọc được chính xác cái object mà app của bạn
+deserialize và chính xác cái endpoint nó đã gọi để lấy về.</p>
+<p><strong>Next:</strong> bạn đã đọc hết cả engine. Chương cuối sẽ giúp bạn tự lực — một capstone, tự đọc một PR thật mà
+không cần trợ giúp, và re-sync cuốn sách này khi bạn re-pin.
 → <strong><a href="08-capstone-and-staying-current.html">Chapter 08 — Capstone &amp; Staying Current</a></strong></p>
-    <nav class="pager"><a class="prev" href="06-map-matching.html"><span class="lbl">← Previous</span><span class="ttl">Map-Matching — snapping GPS to roads</span></a><a class="next" href="08-capstone-and-staying-current.html"><span class="lbl">Next →</span><span class="ttl">Capstone &amp; Staying Current</span></a></nav>
+    <nav class="pager"><a class="prev" href="06-map-matching.html"><span class="lbl">← Trước</span><span class="ttl">Map-Matching — snapping GPS to roads</span></a><a class="next" href="08-capstone-and-staying-current.html"><span class="lbl">Tiếp →</span><span class="ttl">Capstone &amp; Staying Current</span></a></nav>
   </article></main>
-  <aside class="toc"><nav><h4>On this page</h4>
-<a class="lvl-2" href="#71-why-it-matters">7.1 Why it matters</a>
-<a class="lvl-2" href="#72-mental-model-from-edges-to-a-rendered-answer">7.2 Mental model: from edges to a rendered answer</a>
-<a class="lvl-2" href="#73-turn-instructions-from-edges">7.3 Turn instructions from edges</a>
-<a class="lvl-2" href="#74-the-response-model">7.4 The response model</a>
-<a class="lvl-2" href="#75-the-endpoint-family">7.5 The endpoint family</a>
-<a class="lvl-2" href="#76-lab-7-hit-the-surface">7.6 Lab 7 — hit the surface</a>
+  <aside class="toc"><nav><h4>Trong trang này</h4>
+<a class="lvl-2" href="#71-vi-sao-quan-trong">7.1 Vì sao quan trọng</a>
+<a class="lvl-2" href="#72-mental-model-tu-edges-toi-mot-cau-tra-loi-a-render">7.2 Mental model: từ edges tới một câu trả lời đã render</a>
+<a class="lvl-2" href="#73-turn-instruction-tu-edges">7.3 Turn instruction từ edges</a>
+<a class="lvl-2" href="#74-response-model">7.4 Response model</a>
+<a class="lvl-2" href="#75-ho-endpoint">7.5 Họ endpoint</a>
+<a class="lvl-2" href="#76-lab-7-cham-vao-be-mat">7.6 Lab 7 — chạm vào bề mặt</a>
 <a class="lvl-2" href="#77-checkpoint">7.7 Checkpoint</a>
 <a class="lvl-2" href="#connect-to-your-past-the-on-screen-map-and-the-eta">🔌 Connect to your past (the on-screen map and the ETA)</a>
 </nav></aside>
 </div>
 <footer class="site-foot">
   <a class="foot-brand" href="https://rumitx.com" target="_blank" rel="noopener"><span class="foot-x">X</span> RumitX</a>
-  GraphHopper Internals Handbook · grounded in <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
-  @ <code>11.0</code> · maps &amp; route-finding, from the source<br>
-  A <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> publication · maps, routing &amp; human-centric mobility
+  GraphHopper Internals Handbook · neo vào <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
+  @ <code>11.0</code> · maps &amp; route-finding, đọc từ source<br>
+  Một ấn phẩm của <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> · maps, routing &amp; human-centric mobility
 </footer>
-<script src="assets/app.js"></script>
+<script src="../assets/app.js"></script>
 </body>
 </html>

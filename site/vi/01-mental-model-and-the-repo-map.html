@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="vi" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chapter 01 — Mental Model &amp; the Repo Map · GraphHopper Internals Handbook · RumitX</title>
-<meta name="description" content="A from-the-source handbook on graphhopper/graphhopper: the graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, and the routing web API.">
-<link rel="icon" type="image/svg+xml" href="assets/brand/logo_x.svg">
+<meta name="description" content="Cuốn sách đọc thẳng từ source về graphhopper/graphhopper: graph model, Dijkstra / A* / Contraction Hierarchies / Landmarks, custom-model weighting, GTFS &amp; RAPTOR transit, map-matching, và routing web API.">
+<link rel="icon" type="image/svg+xml" href="../assets/brand/logo_x.svg">
 <meta name="author" content="RumitX">
 <meta name="theme-color" content="#0B1E2D">
-<link rel="alternate" hreflang="en" href="01-mental-model-and-the-repo-map.html">
-<link rel="alternate" hreflang="vi" href="vi/01-mental-model-and-the-repo-map.html">
-<link rel="alternate" hreflang="x-default" href="01-mental-model-and-the-repo-map.html">
-<link rel="stylesheet" href="assets/styles.css">
-<link rel="stylesheet" href="assets/code.css">
+<link rel="alternate" hreflang="en" href="../01-mental-model-and-the-repo-map.html">
+<link rel="alternate" hreflang="vi" href="01-mental-model-and-the-repo-map.html">
+<link rel="alternate" hreflang="x-default" href="../01-mental-model-and-the-repo-map.html">
+<link rel="stylesheet" href="../assets/styles.css">
+<link rel="stylesheet" href="../assets/code.css">
 <style>
 .lang-switch{display:inline-flex;align-items:center;gap:.1rem;padding:.15rem;
   border:1px solid var(--border);border-radius:999px;background:var(--surface);
@@ -31,14 +31,14 @@
   <a class="brand" href="index.html"><span class="mark"><span>X</span></span> GraphHopper Internals Handbook</a>
   <span class="spacer"></span>
   <span class="meta-pill">pinned&nbsp;11.0</span>
-  <div class="lang-switch"><span aria-current="true">EN</span><a href="vi/01-mental-model-and-the-repo-map.html" hreflang="vi">VI</a></div>
+  <div class="lang-switch"><a href="../01-mental-model-and-the-repo-map.html" hreflang="en">EN</a><span aria-current="true">VI</span></div>
   <button class="icon-btn" id="theme-btn" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
 </header>
 <div class="backdrop"></div>
 <div class="shell">
   <aside class="rail"><nav>
-<a class="brand-mini" href="index.html"><img src="assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
-<h4>Chapters</h4>
+<a class="brand-mini" href="index.html"><img src="../assets/brand/logo_x.svg" alt="" width="22" height="22"><span class="bm-name">RumitX</span><span class="bm-pub">GraphHopper Internals Handbook</span></a>
+<h4>Chương</h4>
 <a class="" href="00-environment-and-java-refresher.html"><span class="num">00</span><span>Environment &amp; Java Refresher</span></a>
 <a class="active" href="01-mental-model-and-the-repo-map.html"><span class="num">01</span><span>Mental Model &amp; the Repo Map</span></a>
 <a class="" href="02-the-graph-map-to-network.html"><span class="num">02</span><span>The Graph — turning a map into a routable network</span></a>
@@ -48,31 +48,32 @@
 <a class="" href="06-map-matching.html"><span class="num">06</span><span>Map-Matching — snapping GPS to roads</span></a>
 <a class="" href="07-navigation-isochrones-web.html"><span class="num">07</span><span>Navigation, Isochrones &amp; the Web/Tiles Surface</span></a>
 <a class="" href="08-capstone-and-staying-current.html"><span class="num">08</span><span>Capstone &amp; Staying Current</span></a>
-<h4>Reference</h4>
+<h4>Tham khảo</h4>
 <a class="" href="glossary.html"><span class="num">§</span><span>Glossary &amp; Index</span></a>
 <a href="https://github.com/rumitvn/graphhopper-book" target="_blank" rel="noopener"><span class="num">↗</span><span>GitHub repo</span></a>
 </nav></aside>
   <main class="content"><article class="article">
-    <div class="crumbs"><a href="index.html">Handbook</a> / Chapter 01</div>
+    <div class="crumbs"><a href="index.html">Handbook</a> / Chương 01</div>
     <h1 id="chapter-01-mental-model-the-repo-map">Chapter 01 — Mental Model &amp; the Repo Map</h1>
 <div class="callout goal">
-<p><strong>Goal:</strong> Hold the whole engine in your head at once. After this chapter you can name GraphHopper's four
-layers — <strong>import → store → query → shape</strong> — point at the module each lives in, and trace a single
-<code>/route?point=A&amp;point=B</code> request hop by hop from the HTTP resource to the <code>ResponsePath</code> it returns and
-back out as JSON. Pinned to <strong><code>11.0</code></strong> (<code>69e50f6</code>).</p>
+<p><strong>Goal:</strong> Giữ được cả engine trong đầu cùng một lúc. Sau chương này bạn gọi tên được bốn tầng của
+GraphHopper — <strong>import → store → query → shape</strong> — chỉ ra được module mà mỗi tầng nằm trong đó, và lần
+theo một request <code>/route?point=A&amp;point=B</code> qua từng chặng, từ HTTP resource cho tới <code>ResponsePath</code> mà nó
+trả về rồi ra ngoài dưới dạng JSON. Pinned tại <strong><code>11.0</code></strong> (<code>69e50f6</code>).</p>
 </div>
-<h2 id="11-why-it-matters">1.1 Why it matters</h2>
-<p>A routing engine sounds like one thing — "find the shortest path" — but it is really <strong>four</strong> things, and
-they run at different times. If you don't separate them, the code looks like a maze; once you do, every
-file has an obvious home:</p>
+<h2 id="11-vi-sao-quan-trong">1.1 Vì sao quan trọng</h2>
+<p>Một routing engine nghe như chỉ làm một việc — "tìm đường ngắn nhất" — nhưng thật ra nó làm <strong>bốn</strong> việc,
+và chúng chạy vào những thời điểm khác nhau. Nếu không tách bạch ra, code trông như một mê cung; một khi
+tách rồi, file nào cũng có chỗ ở rõ ràng của nó:</p>
 <ol>
-<li><strong>Import</strong> — turn a map file (<code>.osm.pbf</code>) into an internal graph. Runs once.</li>
-<li><strong>Store</strong> — keep that graph in compact, memory-mappable form on disk (<code>graph-cache/</code>). Persists.</li>
-<li><strong>Query</strong> — given two points, run an algorithm over the stored graph. Runs per request, in ~1 ms.</li>
-<li><strong>Shape</strong> — turn the raw edge sequence into what a client wants: turn instructions, geometry, an ETA.</li>
+<li><strong>Import</strong> — biến một file bản đồ (<code>.osm.pbf</code>) thành một graph nội bộ. Chạy một lần.</li>
+<li><strong>Store</strong> — giữ graph đó ở dạng gọn, memory-mappable trên đĩa (<code>graph-cache/</code>). Tồn tại lâu dài.</li>
+<li><strong>Query</strong> — cho hai điểm, chạy một thuật toán trên graph đã lưu. Chạy mỗi request, trong khoảng ~1 ms.</li>
+<li><strong>Shape</strong> — biến chuỗi edge thô thành thứ client cần: turn instructions, geometry, một cái ETA.</li>
 </ol>
-<p>The whole rest of this book is a tour of those four layers. This chapter draws the map so the later
-chapters are "go deeper on a box you've already placed," not "where does this even live?"</p>
+<p>Toàn bộ phần còn lại của cuốn sách là một chuyến đi vòng qua bốn tầng đó. Chương này vẽ ra tấm bản đồ để
+các chương sau trở thành "đào sâu vào một cái ô bạn đã đặt sẵn vị trí", chứ không phải "cái này rốt cuộc
+nằm ở đâu?".</p>
 <h2 id="12-mental-model-import-store-query-shape">1.2 Mental model: import → store → query → shape</h2>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">text</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code>   OSM .pbf                                          graph-cache/ (on disk)
       │                                                    ▲   │
@@ -91,18 +92,18 @@ chapters are "go deeper on a box you've already placed," not "where does this ev
                                                                         Chapter 1 (this trace)
 </code></pre></div></figure>
 
-<p>Two things to hold. First, <strong>import + store happen before any request</strong> — that's the <code>importOrLoad()</code>
-phase from §0.5. By the time a <code>/route</code> arrives, the graph, the Contraction-Hierarchies shortcuts, and the
-landmarks are already built and memory-mapped; a query only <em>reads</em>. Second, the <strong>web layer is thin</strong> —
-it parses a request, calls one method, and serializes the answer. Everything interesting is below it.</p>
-<h2 id="13-the-module-map">1.3 The module map</h2>
-<p>Map the four layers onto the Maven modules from §0.3:</p>
+<p>Hai điều cần giữ trong đầu. Thứ nhất, <strong>import + store diễn ra trước bất kỳ request nào</strong> — đó là pha
+<code>importOrLoad()</code> từ §0.5. Đến lúc một <code>/route</code> chạy tới, graph, các Contraction-Hierarchies shortcut, và
+các landmark đã được dựng sẵn và memory-map rồi; một query chỉ <em>đọc</em>. Thứ hai, <strong>web layer mỏng</strong> — nó
+parse một request, gọi đúng một method, rồi serialize câu trả lời. Mọi thứ thú vị đều nằm bên dưới nó.</p>
+<h2 id="13-ban-o-module">1.3 Bản đồ module</h2>
+<p>Ánh xạ bốn tầng lên các Maven module từ §0.3:</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
-<th>Layer</th>
-<th>Lives in</th>
-<th>Star symbols</th>
+<th>Tầng</th>
+<th>Nằm trong</th>
+<th>Symbol chủ chốt</th>
 </tr>
 </thead>
 <tbody>
@@ -142,63 +143,63 @@ it parses a request, calls one method, and serializes the answer. Everything int
 <td><code>RouteResource</code>, <code>IsochroneResource</code>, <code>GraphHopperApplication</code></td>
 </tr>
 <tr>
-<td>Request/response objects</td>
+<td>Request/response object</td>
 <td><code>web-api</code></td>
 <td><code>GHRequest</code>, <code>GHResponse</code>, <code>ResponsePath</code></td>
 </tr>
 </tbody>
 </table></div>
 <div class="callout note"><span class="ic">🧠</span>
-<p> <strong>Mental model:</strong> <code>core</code> is the engine; <code>web-api</code> is the <em>vocabulary</em> the engine and the outside world
-share (<code>GHRequest</code>/<code>GHResponse</code>); <code>web-bundle</code> + <code>web</code> are the HTTP skin. The transit and map-matching
-modules are peers of <code>core</code> that reuse its graph and algorithms.</p>
+<p> <strong>Mental model:</strong> <code>core</code> là engine; <code>web-api</code> là <em>bộ từ vựng</em> mà engine và thế giới bên ngoài dùng
+chung (<code>GHRequest</code>/<code>GHResponse</code>); <code>web-bundle</code> + <code>web</code> là lớp da HTTP. Các module transit và map-matching
+là anh em ngang hàng với <code>core</code>, tái dùng graph và thuật toán của nó.</p>
 </div>
-<h2 id="14-one-request-end-to-end">1.4 One request, end to end</h2>
-<p>Let's follow <code>GET /route?point=52.52,13.39&amp;point=52.50,13.42&amp;profile=car</code> through every hop. Open each
-file as we go.</p>
-<p><strong>Hop 1 — the HTTP resource.</strong> The endpoint is a JAX-RS resource:</p>
+<h2 id="14-mot-request-au-en-cuoi">1.4 Một request, đầu đến cuối</h2>
+<p>Cùng lần theo <code>GET /route?point=52.52,13.39&amp;point=52.50,13.42&amp;profile=car</code> qua từng chặng. Mở từng file
+ra khi ta đi tới.</p>
+<p><strong>Hop 1 — HTTP resource.</strong> Endpoint là một JAX-RS resource:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nd">@Path</span><span class="p">(</span><span class="s">&quot;route&quot;</span><span class="p">)</span>
 <span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">RouteResource</span><span class="w"> </span><span class="p">{</span>
 </code></pre></div></figure>
 
-<p>📌 <code>web-bundle/src/main/java/com/graphhopper/resources/RouteResource.java:57</code>–<code>:58</code>. The <code>GET</code> handler
-(<code>:82</code>–<code>:108</code>) declares the query parameters, including the repeated <code>point</code> and the <code>profile</code>:</p>
+<p>📌 <code>web-bundle/src/main/java/com/graphhopper/resources/RouteResource.java:57</code>–<code>:58</code>. Cái <code>GET</code> handler
+(<code>:82</code>–<code>:108</code>) khai báo các query parameter, bao gồm <code>point</code> lặp lại và <code>profile</code>:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nd">@QueryParam</span><span class="p">(</span><span class="s">&quot;point&quot;</span><span class="p">)</span><span class="w"> </span><span class="nd">@NotNull</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">GHPointParam</span><span class="o">&gt;</span><span class="w"> </span><span class="n">pointParams</span><span class="p">,</span><span class="w">   </span><span class="c1">// :89</span>
 <span class="nd">@QueryParam</span><span class="p">(</span><span class="s">&quot;profile&quot;</span><span class="p">)</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">profileName</span><span class="p">,</span><span class="w">                      </span><span class="c1">// :96</span>
 </code></pre></div></figure>
 
-<p><strong>Hop 2 — params become a <code>GHRequest</code>.</strong> The resource assembles the same domain object you built by hand
-in §0.4:</p>
+<p><strong>Hop 2 — params thành một <code>GHRequest</code>.</strong> Resource lắp ráp lại đúng cái domain object bạn từng dựng thủ
+công ở §0.4:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">GHRequest</span><span class="w"> </span><span class="n">request</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">GHRequest</span><span class="p">();</span><span class="w">                 </span><span class="c1">// :116</span>
 <span class="c1">// ...</span>
 <span class="n">request</span><span class="p">.</span><span class="na">setPoints</span><span class="p">(</span><span class="n">points</span><span class="p">).</span><span class="na">setProfile</span><span class="p">(</span><span class="n">profileName</span><span class="p">)</span>
 <span class="w">       </span><span class="p">.</span><span class="na">setAlgorithm</span><span class="p">(</span><span class="n">algoStr</span><span class="p">).</span><span class="na">setLocale</span><span class="p">(</span><span class="n">localeStr</span><span class="p">);</span><span class="w">  </span><span class="c1">// :122–:133</span>
 </code></pre></div></figure>
 
-<p>📌 <code>RouteResource.java:116</code>–<code>:133</code>. A little profile resolution runs first (<code>:145</code>–<code>:152</code>), then the one
-line that crosses from the web layer into the engine:</p>
+<p>📌 <code>RouteResource.java:116</code>–<code>:133</code>. Một chút xử lý resolve profile chạy trước (<code>:145</code>–<code>:152</code>), rồi đến đúng
+một dòng bắc cầu từ web layer sang engine:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="n">GHResponse</span><span class="w"> </span><span class="n">ghResponse</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">graphHopper</span><span class="p">.</span><span class="na">route</span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
 </code></pre></div></figure>
 
-<p>📌 <code>RouteResource.java:154</code>. Everything above this line is HTTP; everything below is the engine. If the
-response has errors, the resource maps them to HTTP 400 (<code>:159</code>–<code>:165</code>).</p>
-<p><strong>Hop 3 — the façade builds a fresh <code>Router</code>.</strong> <code>GraphHopper.route</code> is tiny — and revealing:</p>
+<p>📌 <code>RouteResource.java:154</code>. Mọi thứ phía trên dòng này là HTTP; mọi thứ phía dưới là engine. Nếu response
+có lỗi, resource ánh xạ chúng thành HTTP 400 (<code>:159</code>–<code>:165</code>).</p>
+<p><strong>Hop 3 — façade dựng một <code>Router</code> mới toanh.</strong> <code>GraphHopper.route</code> bé xíu — và hé lộ nhiều điều:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="n">GHResponse</span><span class="w"> </span><span class="nf">route</span><span class="p">(</span><span class="n">GHRequest</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">createRouter</span><span class="p">().</span><span class="na">route</span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
 <span class="p">}</span>
 </code></pre></div></figure>
 
 <p>📌 <code>core/src/main/java/com/graphhopper/GraphHopper.java:1333</code>–<code>:1335</code>. <code>createRouter()</code> (<code>:1337</code>–<code>:1347</code>)
-checks the engine is fully loaded, then <code>doCreateRouter()</code> (<code>:1349</code>–<code>:1355</code>) constructs <code>new Router(...)</code>,
-handing it the <code>baseGraph</code>, the <code>encodingManager</code>, the <code>locationIndex</code>, the profiles, and — crucially —
-the prepared <strong>CH graphs</strong> and <strong>landmarks</strong>.</p>
+kiểm tra engine đã load đầy đủ chưa, rồi <code>doCreateRouter()</code> (<code>:1349</code>–<code>:1355</code>) dựng <code>new Router(...)</code>, trao
+cho nó <code>baseGraph</code>, <code>encodingManager</code>, <code>locationIndex</code>, các profile, và — mấu chốt — các <strong>CH graph</strong> cùng
+<strong>landmark</strong> đã prepare sẵn.</p>
 <div class="callout note"><span class="ic">🧠</span>
-<p> <strong>Mental model:</strong> a <code>Router</code> is created <strong>per request</strong>, but it's cheap — it just wires references to
-the already-built, shared, read-only structures. The heavy stuff (the graph, the shortcuts) was built at
-import time and is never rebuilt. This is the import/query split made concrete.</p>
+<p> <strong>Mental model:</strong> một <code>Router</code> được tạo <strong>mỗi request</strong>, nhưng nó rẻ — chỉ đơn thuần nối dây tham
+chiếu tới những cấu trúc đã dựng sẵn, chia sẻ, chỉ-đọc. Phần nặng (graph, các shortcut) đã được dựng lúc
+import và không bao giờ dựng lại. Đây chính là ranh giới import/query được cụ thể hoá.</p>
 </div>
-<p><strong>Hop 4 — the <code>Router</code> validates and dispatches.</strong> The class is <code>Router.java:58</code>; its <code>route</code> method is
-the real orchestration:</p>
+<p><strong>Hop 4 — <code>Router</code> validate và dispatch.</strong> Class là <code>Router.java:58</code>; method <code>route</code> của nó mới là phần
+điều phối thật sự:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="n">GHResponse</span><span class="w"> </span><span class="nf">route</span><span class="p">(</span><span class="n">GHRequest</span><span class="w"> </span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="n">checkNoLegacyParameters</span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
@@ -212,8 +213,8 @@ the real orchestration:</p>
 <span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">routeVia</span><span class="p">(</span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="n">solver</span><span class="p">);</span>
 </code></pre></div></figure>
 
-<p>📌 <code>Router.java:97</code>–<code>:120</code>. The one decision that determines everything about <em>how fast</em> the query runs is
-which solver it creates:</p>
+<p>📌 <code>Router.java:97</code>–<code>:120</code>. Cái quyết định duy nhất định đoạt mọi thứ về <em>tốc độ</em> của query là nó tạo ra
+solver nào:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">chEnabled</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">disableCH</span><span class="p">)</span><span class="w">      </span><span class="c1">// Contraction Hierarchies — fastest, fixed weighting</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">createCHSolver</span><span class="p">(...);</span>
 <span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lmEnabled</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="o">!</span><span class="n">disableLM</span><span class="p">)</span><span class="w"> </span><span class="c1">// Landmarks/ALT — fast, flexible weighting</span>
@@ -222,23 +223,23 @@ which solver it creates:</p>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">createFlexSolver</span><span class="p">(...);</span>
 </code></pre></div></figure>
 
-<p>📌 <code>Router.java:190</code>–<code>:198</code> (<code>chEnabled</code>/<code>lmEnabled</code> were set at <code>:88</code>–<code>:89</code> from whether CH graphs /
-landmarks exist). That three-way choice <strong>is</strong> Chapter 3.</p>
-<p><strong>Hop 5 — the answer comes back.</strong> The solver runs an algorithm (Chapter 3), builds a <code>ResponsePath</code> with
-geometry, distance, time and instructions (Chapter 7), and the resource pulls the best one:</p>
+<p>📌 <code>Router.java:190</code>–<code>:198</code> (<code>chEnabled</code>/<code>lmEnabled</code> được set ở <code>:88</code>–<code>:89</code> tuỳ vào có tồn tại CH graph /
+landmark hay không). Cái lựa chọn ba nhánh đó <strong>chính là</strong> Chương 3.</p>
+<p><strong>Hop 5 — câu trả lời quay về.</strong> Solver chạy một thuật toán (Chương 3), dựng một <code>ResponsePath</code> kèm
+geometry, distance, time và instructions (Chương 7), rồi resource rút ra cái tốt nhất:</p>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">Java</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="kd">public</span><span class="w"> </span><span class="n">ResponsePath</span><span class="w"> </span><span class="nf">getBest</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">responsePaths</span><span class="p">.</span><span class="na">get</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div></figure>
 
-<p>📌 <code>web-api/src/main/java/com/graphhopper/GHResponse.java:48</code>. <code>RouteResource</code> serializes it to JSON and
-writes HTTP 200. Request complete.</p>
-<h2 id="15-the-one-insight-to-keep">1.5 The one insight to keep</h2>
-<p>Every <code>/route</code> call funnels through <strong>one method</strong> (<code>GraphHopper.route</code>, <code>:1333</code>) into <strong>one dispatcher</strong>
-(<code>Router.route</code>, <code>:97</code>) that makes <strong>one choice</strong> (CH vs LM vs flexible, <code>:190</code>). If you remember only
-that spine, you can find your way into any routing behaviour in the codebase from the outside in.</p>
-<h2 id="16-lab-1-trace-the-request-yourself">1.6 Lab 1 — trace the request yourself</h2>
+<p>📌 <code>web-api/src/main/java/com/graphhopper/GHResponse.java:48</code>. <code>RouteResource</code> serialize nó thành JSON và
+ghi HTTP 200. Request hoàn tất.</p>
+<h2 id="15-mot-insight-duy-nhat-can-giu">1.5 Một insight duy nhất cần giữ</h2>
+<p>Mọi lời gọi <code>/route</code> đều dồn qua <strong>một method</strong> (<code>GraphHopper.route</code>, <code>:1333</code>) vào <strong>một dispatcher</strong>
+(<code>Router.route</code>, <code>:97</code>), nơi đưa ra <strong>một lựa chọn</strong> (CH vs LM vs flexible, <code>:190</code>). Chỉ cần nhớ cái xương
+sống đó, bạn có thể lần từ ngoài vào để tìm đường tới bất kỳ hành vi routing nào trong codebase.</p>
+<h2 id="16-lab-1-tu-tay-lan-theo-request">1.6 Lab 1 — tự tay lần theo request</h2>
 <div class="callout lab"><span class="ic">🧪</span>
-<p> <strong>Lab 1.</strong> No build needed beyond Chapter 0's server. Goal: confirm the trace by reading the six hops
-and by watching the request from the outside. Record in <a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab01-trace.md"><code>labs/lab01-trace.md</code></a>.</p>
+<p> <strong>Lab 1.</strong> Không cần build gì thêm ngoài server ở Chương 0. Mục tiêu: xác nhận cái trace bằng cách đọc
+sáu chặng và quan sát request từ bên ngoài. Ghi vào <a href="https://github.com/rumitvn/graphhopper-book/blob/main/labs/lab01-trace.md"><code>labs/lab01-trace.md</code></a>.</p>
 </div>
 <figure class="codeblock"><div class="cb-bar"><span class="dot"></span><span class="cb-lang">bash</span><button class="cb-copy" type="button">copy</button></div><div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/Documents/learning/graphhopper
 <span class="c1"># read each hop and confirm the line resolves to the symbol:</span>
@@ -251,51 +252,54 @@ python3<span class="w"> </span>~/Documents/learning/graphhopper-book/labs/query_
 curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:8989/route?point=52.517,13.389&amp;point=52.508,13.421&amp;profile=car&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-c<span class="w"> </span><span class="m">400</span>
 </code></pre></div></figure>
 
-<p><strong>Expected:</strong> <code>RouteResource.java:154</code> reads <code>GHResponse ghResponse = graphHopper.route(request);</code>;
-<code>GraphHopper.java:1333</code> reads <code>public GHResponse route(GHRequest request)</code>; <code>Router.java:190</code>–<code>:198</code> shows
-the CH/LM/flex branch. <code>query.py</code> prints a distance/time line; the <code>curl</code> shows a JSON body with a
-<code>paths</code> array and an <code>info.took</code> in milliseconds. Note that <code>took</code> — that's the whole query, and it's tiny.</p>
+<p><strong>Expected:</strong> <code>RouteResource.java:154</code> đọc ra <code>GHResponse ghResponse = graphHopper.route(request);</code>;
+<code>GraphHopper.java:1333</code> đọc ra <code>public GHResponse route(GHRequest request)</code>; <code>Router.java:190</code>–<code>:198</code> cho
+thấy nhánh CH/LM/flex. <code>query.py</code> in ra một dòng distance/time; cái <code>curl</code> cho thấy một JSON body với một
+mảng <code>paths</code> và một <code>info.took</code> tính bằng millisecond. Để ý con số <code>took</code> đó — đó là toàn bộ query, và nó
+tí xíu.</p>
 <h2 id="17-checkpoint">1.7 Checkpoint</h2>
 <ol>
-<li>Name GraphHopper's four layers and say which run <em>before</em> a request arrives vs <em>per</em> request.</li>
-<li>A <code>/route</code> request enters the engine at exactly one line. Which file:line, and what is above vs below it?</li>
-<li>Why does <code>GraphHopper.route</code> build a <strong>new <code>Router</code> every request</strong>, and why is that not expensive?</li>
-<li><code>Router.route</code> makes one three-way decision that sets the query's speed. What are the three options and
-   what does each trade off?</li>
-<li>Which module holds <code>GHRequest</code>/<code>GHResponse</code>, and why does it sit <em>between</em> <code>core</code> and the web layer?</li>
+<li>Gọi tên bốn tầng của GraphHopper và nói tầng nào chạy <em>trước khi</em> một request tới, tầng nào chạy <em>mỗi</em>
+   request.</li>
+<li>Một request <code>/route</code> đi vào engine tại đúng một dòng. File:line nào, và cái gì nằm trên so với nằm dưới nó?</li>
+<li>Vì sao <code>GraphHopper.route</code> dựng một <strong><code>Router</code> mới mỗi request</strong>, và vì sao chuyện đó không tốn kém?</li>
+<li><code>Router.route</code> đưa ra một quyết định ba nhánh định đoạt tốc độ của query. Ba lựa chọn là gì và mỗi cái
+   đánh đổi điều gì?</li>
+<li>Module nào giữ <code>GHRequest</code>/<code>GHResponse</code>, và vì sao nó nằm <em>giữa</em> <code>core</code> và web layer?</li>
 </ol>
 <div class="callout note">
-<p>If #2 is shaky, re-read §1.4 Hop 2–3. If #4 is shaky, re-read §1.4 Hop 4 and hold it for Chapter 3.</p>
+<p>Nếu câu #2 còn lung lay, đọc lại §1.4 Hop 2–3. Nếu câu #4 còn lung lay, đọc lại §1.4 Hop 4 và giữ lấy nó
+cho Chương 3.</p>
 </div>
 <h2 class="connect" id="connect-to-your-past-your-app-already-calls-this-boundary">🔌 Connect to your past (your app already calls this boundary)</h2>
-<p>Whatever routing your app does today, it crosses exactly the boundary you just traced — usually as an HTTP
-call to a routing service. BusMap asking "how do I get from stop A to stop B", a ride-hailing backend
-asking "what's the ETA from the driver to the rider" — both send the equivalent of a <code>GHRequest</code> and read
-back the equivalent of a <code>ResponsePath</code>. What this chapter gives you is the <em>other side</em> of that call: the
-<code>RouteResource</code> → <code>GraphHopper.route</code> → <code>Router</code> → <code>ResponsePath</code> spine your requests have been hitting all
-along. From here on, when your app makes a routing call, you'll know what the server does with it in the
-millisecond before it answers.</p>
-<p><strong>Next:</strong> the query layer needs something to walk. Let's build it — how an OSM file becomes the
-<code>BaseGraph</code> every algorithm sweeps. → <strong><a href="02-the-graph-map-to-network.html">Chapter 02 — The Graph</a></strong></p>
-    <nav class="pager"><a class="prev" href="00-environment-and-java-refresher.html"><span class="lbl">← Previous</span><span class="ttl">Environment &amp; Java Refresher</span></a><a class="next" href="02-the-graph-map-to-network.html"><span class="lbl">Next →</span><span class="ttl">The Graph — turning a map into a routable network</span></a></nav>
+<p>Dù app của bạn hôm nay làm routing kiểu gì, nó đều băng qua đúng cái ranh giới bạn vừa lần theo — thường là
+một lời gọi HTTP tới một routing service. BusMap hỏi "đi từ điểm dừng A tới điểm dừng B thế nào", một
+backend gọi xe hỏi "ETA từ tài xế tới khách là bao nhiêu" — cả hai đều gửi đi thứ tương đương một
+<code>GHRequest</code> và đọc về thứ tương đương một <code>ResponsePath</code>. Thứ chương này trao cho bạn là <em>phía bên kia</em> của
+lời gọi đó: cái xương sống <code>RouteResource</code> → <code>GraphHopper.route</code> → <code>Router</code> → <code>ResponsePath</code> mà request của
+bạn vẫn luôn chạm vào. Từ đây trở đi, mỗi khi app của bạn thực hiện một lời gọi routing, bạn sẽ biết server
+làm gì với nó trong cái millisecond trước khi nó trả lời.</p>
+<p><strong>Next:</strong> query layer cần một cái gì đó để đi trên đó. Hãy dựng nó — làm sao một file OSM trở thành cái
+<code>BaseGraph</code> mà mọi thuật toán quét qua. → <strong><a href="02-the-graph-map-to-network.html">Chapter 02 — The Graph</a></strong></p>
+    <nav class="pager"><a class="prev" href="00-environment-and-java-refresher.html"><span class="lbl">← Trước</span><span class="ttl">Environment &amp; Java Refresher</span></a><a class="next" href="02-the-graph-map-to-network.html"><span class="lbl">Tiếp →</span><span class="ttl">The Graph — turning a map into a routable network</span></a></nav>
   </article></main>
-  <aside class="toc"><nav><h4>On this page</h4>
-<a class="lvl-2" href="#11-why-it-matters">1.1 Why it matters</a>
+  <aside class="toc"><nav><h4>Trong trang này</h4>
+<a class="lvl-2" href="#11-vi-sao-quan-trong">1.1 Vì sao quan trọng</a>
 <a class="lvl-2" href="#12-mental-model-import-store-query-shape">1.2 Mental model: import → store → query → shape</a>
-<a class="lvl-2" href="#13-the-module-map">1.3 The module map</a>
-<a class="lvl-2" href="#14-one-request-end-to-end">1.4 One request, end to end</a>
-<a class="lvl-2" href="#15-the-one-insight-to-keep">1.5 The one insight to keep</a>
-<a class="lvl-2" href="#16-lab-1-trace-the-request-yourself">1.6 Lab 1 — trace the request yourself</a>
+<a class="lvl-2" href="#13-ban-o-module">1.3 Bản đồ module</a>
+<a class="lvl-2" href="#14-mot-request-au-en-cuoi">1.4 Một request, đầu đến cuối</a>
+<a class="lvl-2" href="#15-mot-insight-duy-nhat-can-giu">1.5 Một insight duy nhất cần giữ</a>
+<a class="lvl-2" href="#16-lab-1-tu-tay-lan-theo-request">1.6 Lab 1 — tự tay lần theo request</a>
 <a class="lvl-2" href="#17-checkpoint">1.7 Checkpoint</a>
 <a class="lvl-2" href="#connect-to-your-past-your-app-already-calls-this-boundary">🔌 Connect to your past (your app already calls this boundary)</a>
 </nav></aside>
 </div>
 <footer class="site-foot">
   <a class="foot-brand" href="https://rumitx.com" target="_blank" rel="noopener"><span class="foot-x">X</span> RumitX</a>
-  GraphHopper Internals Handbook · grounded in <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
-  @ <code>11.0</code> · maps &amp; route-finding, from the source<br>
-  A <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> publication · maps, routing &amp; human-centric mobility
+  GraphHopper Internals Handbook · neo vào <a href="https://github.com/graphhopper/graphhopper/tree/11.0" target="_blank" rel="noopener">graphhopper/graphhopper</a>
+  @ <code>11.0</code> · maps &amp; route-finding, đọc từ source<br>
+  Một ấn phẩm của <a href="https://rumitx.com" target="_blank" rel="noopener">RumitX</a> · maps, routing &amp; human-centric mobility
 </footer>
-<script src="assets/app.js"></script>
+<script src="../assets/app.js"></script>
 </body>
 </html>
